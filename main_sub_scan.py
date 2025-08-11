@@ -35,35 +35,21 @@ async def get_api() -> Union[str, None]:
     signup_task = (
         f"You are creating a new account on Subscan. Follow these steps:\n"
         f"1. Open https://pro.subscan.io/signup/email\n"
-        f"2. Fill in:\n"
-        f"   - Email: {temp_email}\n"
-        f"   - Password: {password}\n"
-        f"   - Confirm Password: {password}\n"
-        f"3. There is a checkbox below the 'Confirm Password' field and to the left of the text 'I have agree...'. Click that checkbox to agree to terms. Do not click on the label or link.\n"
+        f"2. Complete the Sign-Up:\n"
+        f" Under 'Email' enter: {temp_email}\n"
+        f" Under 'Password' enter: {password}\n"
+        f" Under 'Confirm Password' enter: {password}\n"
+        f"3. There is a checkbox below the 'Confirm Password' field and to the left of the text 'I have agree...'. Click that checkbox to agree to terms (it is the 6th indexed item in that page). DO NOT click on the label or link.\n"
         f"4. Then click the 'Sign Up' button to submit the form.\n"
+        f"4. Click on the 'Products' section in the top menu.\n"
+        f"5. Under 'Products', click on 'API Service'.\n"
+        f"6. If you see a verification prompt or message, look for a 'Resend Email' button and click it and finish (DO NOT wait 2 minutes even if the webpage suggests it. After you've clicked the 'Resend Email' - finish the task right away).\n"
     )
 
     await Agent(task=signup_task, llm=llm, controller=controller).run()
     print("✅ Signup submitted.")
 
-    # Step 2: Login to the account
-    print("🔑 Logging into the account...")
-    login_task = (
-        f"Now you need to log in to the account:\n"
-        f"1. Go to https://pro.subscan.io/login\n"
-        f"2. Log in using:\n"
-        f"   - Email: {temp_email}\n"
-        f"   - Password: {password}\n"
-        f"3. Click the login button to proceed.\n"
-        f"4. Click on the 'Products' section in the top menu.\n"
-        f"5. Under 'Products', click on 'API Service'.\n"
-        f"6. If you see a verification prompt or message, look for a 'Resend Email' button and click it and finish.\n"
-    )
-
-    await Agent(task=login_task, llm=llm, controller=controller).run()
-    print("✅ Login attempted, navigated to API service and triggered verification email resend.")
-
-    # Step 4: Wait for verification email (up to 5 minutes)
+    # Step 2: Wait for verification email (up to 5 minutes)
     print("⏳ Waiting for verification email...")
     email_data = wait_for_email_with_link(token, timeout=300, interval=10)
     if not email_data or not email_data.get("link"):
@@ -77,18 +63,20 @@ async def get_api() -> Union[str, None]:
     print("🕒 Waiting 10 seconds before visiting verification link...")
     await asyncio.sleep(10)
 
-    # Step 5: Complete email verification and create API key (now that verification is done)
+    # Step 3: Complete email verification and create API key (now that verification is done)
     verification_andapi_key_task = (
         f"Complete the email verification:\n"
         f"1. Open the following verification link in your current tab:\n"
         f"{verification_link}\n"
-        f"3. Click on the 'Products' section in the top menu.\n"
-        f"4. Under 'Products', click on 'API Service'.\n"
-        f"5. Click the 'Add' button to create a new API key.\n"
-        f"6. Enter 'Sinai' as the app name and press 'Create New API Key'.\n"
-        f"7. Click the small button to the left of the copy API token one to reveal the API token.\n"
-        f"8. Click the small copy icon to copy the API key.\n"
-        f"9. Return only the API key as JSON:\n"
+        f"2. Click on the 'Products' section in the top menu.\n"
+        f"3. Under 'Products', click on 'API Service'.\n"
+        f"4. Click on 'API Key'.\n"
+        f"5. Enter 'Sinai' as the app name.\n"
+        f"6. Click 'Create New API Key'.\n"
+        f"7. Click the small button to the left of the copy API token one to reveal the API token (so it will be without *************). The icon of this button is a closed eye icon (that means that the API Key Token is hidden).\n"
+        f"8. Only after the last stage, click the small copy icon to copy the API key.\n"
+        f"9. If the API Key you copied has astrics in it - return to step 7. If not - continue to the next step.\n"
+        f"8. Return only the API key as JSON:\n"
         f"{{\"api_key\": \"<your_key_here>\"}}"
     )
 
