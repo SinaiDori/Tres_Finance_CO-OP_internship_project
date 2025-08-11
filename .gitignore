@@ -1,0 +1,27 @@
+# === Secrets ===
+.env
+.env.*
+!.env.example
+
+# === CSV outputs (API keys, etc.) ===
+*.csv
+
+# === Python caches & virtual envs ===
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+ruff_cache/
+.venv/
+venv/
+
+# === OS / Editor ===
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# === Playwright artifacts ===
+playwright-report/
+test-results/
+.playwright/
