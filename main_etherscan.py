@@ -5,13 +5,15 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 from browser_use import Agent, Controller
 from langchain_openai import ChatOpenAI
-from temp_email import create_account, wait_for_email_with_link
+from temp_email_etherscan import create_account, wait_for_email_with_link
 
 # Use browser-use version 0.1.45 only!
 
 load_dotenv()
 
 # Output format
+
+
 class APIKey(BaseModel):
     api_key: str
 
@@ -81,6 +83,8 @@ async def get_api() -> Union[str, None]:
         return None
 
 # Writing the api key to csv
+
+
 def write_csv(api_key: str, filename="api_keys.csv") -> None:
     with open(filename, "a", newline="") as csvfile:
         writer = csv.writer(csvfile)
@@ -88,6 +92,8 @@ def write_csv(api_key: str, filename="api_keys.csv") -> None:
     print(f"✅ API key saved to '{filename}'.")
 
 # Running the script in a loop
+
+
 async def run_multiple_keys(n: int = 5):
     for i in range(n):
         print(f"\n🔁 Starting run {i + 1} of {n}")
@@ -98,7 +104,8 @@ async def run_multiple_keys(n: int = 5):
             else:
                 print("⚠️ No key returned.")
         except asyncio.TimeoutError:
-            print(f"⏰ Timeout: API generation run {i + 1} took longer than {TIMEOUT_SECONDS // 60} minutes.")
+            print(
+                f"⏰ Timeout: API generation run {i + 1} took longer than {TIMEOUT_SECONDS // 60} minutes.")
 
 if __name__ == "__main__":
     try:

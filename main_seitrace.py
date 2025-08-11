@@ -6,22 +6,26 @@ from pydantic import BaseModel
 from browser_use import Agent, Controller
 from browser_use.agent.views import ActionResult
 from langchain_openai import ChatOpenAI
-from temp_email import create_account, wait_for_verification_code
+from temp_email_seitrace import create_account, wait_for_verification_code
 
 # Use browser-use version 0.2.5, and not the same as etherscan
 
 load_dotenv()
 
+
 class APIKey(BaseModel):
     api_key: str
+
 
 TIMEOUT_SECONDS = 180  # Timeout for each full flow
 
 # Generating the keys using functions from temp_email.py
+
+
 async def get_api() -> Union[str, None]:
     email, token = create_account()
     print(f"📧 Temporary email: {email}")
-    t = "Strong!Pass123"
+    password = "Strong!Pass123"
     username = email.split("@")[0]
 
     controller = Controller(
@@ -61,6 +65,8 @@ async def get_api() -> Union[str, None]:
         return None
 
 # Writing the api key to csv
+
+
 def write_csv(api_key: str, filename="seitrace_api_keys.csv") -> None:
     with open(filename, "a", newline="") as file:
         writer = csv.writer(file)
@@ -68,6 +74,8 @@ def write_csv(api_key: str, filename="seitrace_api_keys.csv") -> None:
     print(f"✅ API key saved to '{filename}'.")
 
 # Running the script in a loop
+
+
 async def run_multiple_keys(n: int = 1):
     for i in range(n):
         print(f"\n🔁 Starting run {i + 1} of {n}")
@@ -78,7 +86,8 @@ async def run_multiple_keys(n: int = 1):
             else:
                 print("⚠️ No key returned.")
         except asyncio.TimeoutError:
-            print(f"⏰ Timeout: API generation run {i + 1} took longer than {TIMEOUT_SECONDS // 60} minutes.")
+            print(
+                f"⏰ Timeout: API generation run {i + 1} took longer than {TIMEOUT_SECONDS // 60} minutes.")
 
 if __name__ == "__main__":
     try:
