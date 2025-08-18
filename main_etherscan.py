@@ -1,3 +1,6 @@
+from temp_email_etherscan import create_account, wait_for_email_with_link
+from langchain_openai import ChatOpenAI
+from browser_use import Agent, Controller
 import asyncio
 import csv
 import time
@@ -5,9 +8,6 @@ import requests
 from typing import Union
 from dotenv import load_dotenv
 from pydantic import BaseModel
-from browser_use import Agent, Controller
-from langchain_openai import ChatOpenAI
-from temp_email_etherscan import create_account, wait_for_email_with_link
 
 # Use browser-use version 0.1.45 only!
 
@@ -44,9 +44,9 @@ async def get_api() -> Union[str, None]:
         f"- Under 'Confirm Email Adress' enter: {temp_email}\n"
         f"- Under 'Password' enter: {password}\n"
         f"- Under 'Confirm Password' enter: {password}\n"
-        "3. Check the 'I agree to the Terms and Conditions' box."
-        "4. ONLY AFTER you have checked that box, scroll down."
-        "5. click 'Create an Account'.\n"
+        "3. Click the 'Got it' button to accept the cookies.\n"
+        "4. Check the 'I agree to the Terms and Conditions' box."
+        "5. Scroll down and click 'Create an Account'.\n"
         "6. Finish the task.\n"
     )
     await Agent(task=signup_task, llm=llm, controller=controller).run()
@@ -65,23 +65,24 @@ async def get_api() -> Union[str, None]:
         print("❌ Email verification request did not confirm successfully.")
         return None
     print("✅ Email verified.")
-    print("🕒 Waiting 10 seconds before visiting verification link...")
-    await asyncio.sleep(10)
+    # print("🕒 Waiting 10 seconds before visiting verification link...")
+    # await asyncio.sleep(10)
 
     # 3. Login + get API key
     verification_andapi_key_task = (
         f"Open https://etherscan.io/login\n"
-        f"3. Sign in using the following credentials:\n"
+        f"1. Sign in using the following credentials:\n"
         f"- Username: {username}\n"
         f"- Password: {password}\n"
-        f"4. Click on 'LOGIN'.\n"
-        f"5. Under 'OTHERS', click on 'API Dashboard'.\n"
-        f"6. Click '+ Add' to create a new API key.\n"
+        f"2. Click on 'LOGIN'.\n"
+        f"4. Find the 'API Dashboard' button on the left side menu unser 'OTHERS' and click on it.\n"
+        f"6. Find the '+ Add' button and click on it to create a new API key.\n"
         f"7. Enter 'Sinai' as the app name.\n"
         f"8. Click 'Create New API Key'.\n"
         f"9. Scroll down and click the small Copy API Key Token icon to copy the API key.\n"
         f"10. Return only the API key as JSON:\n"
         f"{{\"api_key\": \"<your_key_here>\"}}"
+        f"11. Finish the task.\n"
     )
 
     fresh_controller = Controller(output_model=APIKey)
