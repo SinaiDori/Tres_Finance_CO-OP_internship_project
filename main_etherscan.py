@@ -26,8 +26,9 @@ llm = ChatOpenAI(model="gpt-4o")
 # To prevent endless-loops
 TIMEOUT_SECONDS = 300  # 5 minutes
 
-
 # Generating the keys using functions from temp_email.py
+
+
 async def get_api() -> Union[str, None]:
     temp_email, token = create_account()
     print(f"📧 Temporary email: {temp_email}")
@@ -65,8 +66,6 @@ async def get_api() -> Union[str, None]:
         print("❌ Email verification request did not confirm successfully.")
         return None
     print("✅ Email verified.")
-    # print("🕒 Waiting 10 seconds before visiting verification link...")
-    # await asyncio.sleep(10)
 
     # 3. Login + get API key
     verification_andapi_key_task = (
