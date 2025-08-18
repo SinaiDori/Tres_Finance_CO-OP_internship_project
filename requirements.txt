@@ -15,4 +15,4 @@ playwright>=1.48,<2
 # NOTE: main.py (Etherscan flow) comments that it requires browser-use==0.1.45
 #       main (2).py (SeiTrace) comments that it uses browser-use==0.2.5
 # Pick the version that matches the flow you're running.
-browser-use==0.1.45
+browser-use==0.2.5

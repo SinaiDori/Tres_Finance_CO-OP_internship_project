@@ -28,9 +28,7 @@ async def get_api() -> Union[str, None]:
     password = "Strong!Pass123"
     username = email.split("@")[0]
 
-    controller = Controller(
-        output_model=APIKey,
-    )
+    controller = Controller(output_model=APIKey)
     llm = ChatOpenAI(model="gpt-4o")
 
     def read_otp_from_mailbox() -> ActionResult:
@@ -42,15 +40,38 @@ async def get_api() -> Union[str, None]:
 
     controller.action("Read OTP from mailbox")(read_otp_from_mailbox)
 
+    # task = (
+    #     f"1. Search for seitrace in Gooogle and enter that website .\n"
+    #     f"2. Click 'Sign In' → 'Register'.\n"
+    #     f"3. Enter email {email} and click 'Create account'.\n"
+    #     f"4. Use the action 'Read OTP from mailbox' to get the OTP code.\n"
+    #     f"5. Enter the code when prompted, set password to {password}, and finish registration.\n"
+    #     f"6. Go to Profile → API Keys → Add API Key.\n"
+    #     f"7. Use name 'dana'.\n"
+    #     f"8. Copy the new API key and return it .\n"
+    # )
+
     task = (
-        f"1. Search for seitrace in Gooogle and enter that website .\n"
-        f"2. Click 'Sign In' → 'Register'.\n"
-        f"3. Enter email {email} and click 'Create account'.\n"
-        f"4. Use the action 'Read OTP from mailbox' to get the OTP code.\n"
-        f"5. Enter the code when prompted, set password to {password}, and finish registration.\n"
-        f"6. Go to Profile → API Keys → Add API Key.\n"
-        f"7. Use name 'dana'.\n"
-        f"8. Copy the new API key and return it .\n"
+        f"1. Open https://seitrace.com/?chain=pacific-1\n"
+        f"2. If already signed in, lick the profile icon on the top right menu and continue to step 2.1. Else, Click 'Sign In' in the top right corner and continue to step 3.\n"
+        f"2.1. Click 'Sign Out'.\n"
+        f"2.2. Click 'Sign In' in the top right corner.\n"
+        f"3. Click 'Register'.\n"
+        f"4. Enter email: {email}.\n"
+        f"5. Click 'Create account'.\n"
+        f"6. Use the action 'Read OTP from mailbox' to get the OTP code.\n"
+        f"7. Enter the code when prompted.\n"
+        f"8. Enter password: {password}.\n"
+        f"9. Click 'Save password'.\n"
+        f"10. Click the profile icon on the top right menu.\n"
+        f"11. Click 'API Keys'.\n"
+        f"12. Click '+ Add API Key'.\n"
+        f"13. Enter 'Sinai' as the app name.\n"
+        f"14. Click 'Create new API Key'.\n"
+        f"15. Click the small Copy API Key Token icon to copy the API key.\n"
+        f"16. Return only the API key as JSON:\n"
+        f"{{\"api_key\": \"<your_key_here>\"}}"
+        f"17. Finish the task.\n"
     )
 
     agent = Agent(task=task, llm=llm, controller=controller)
@@ -83,6 +104,7 @@ async def run_multiple_keys(n: int = 1):
             key = await asyncio.wait_for(get_api(), timeout=TIMEOUT_SECONDS)
             if key:
                 write_csv(key)
+                print(f"✅ Successfully generated API key: {key[:10]}...")
             else:
                 print("⚠️ No key returned.")
         except asyncio.TimeoutError:
@@ -91,6 +113,6 @@ async def run_multiple_keys(n: int = 1):
 
 if __name__ == "__main__":
     try:
-        asyncio.run(run_multiple_keys(3))
+        asyncio.run(run_multiple_keys(1))
     except KeyboardInterrupt:
         print("\n🛑 Process interrupted by user.")
