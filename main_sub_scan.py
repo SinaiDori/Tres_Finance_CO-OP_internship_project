@@ -30,7 +30,7 @@ browser_profile = BrowserProfile(
 browser_session = BrowserSession(browser_profile=browser_profile)
 
 
-TIMEOUT_SECONDS = 300  # 5 minutes total
+TIMEOUT_SECONDS = 10
 
 # Generating the keys using functions from temp_email.py
 
@@ -58,9 +58,9 @@ async def get_api() -> Union[str, None]:
     await Agent(task=signup_task, llm=llm, controller=controller, browser_session=browser_session).run()
     print("✅ Signup submitted.")
 
-    # Step 2: Wait for verification email (up to 5 minutes)
+    # Step 2: Wait for verification email (up to 30 seconds)
     print("⏳ Waiting for verification email...")
-    email_data = wait_for_email_with_link(token, timeout=300, interval=10)
+    email_data = wait_for_email_with_link(token, timeout=30, interval=10)
     if not email_data or not email_data.get("link"):
         print("❌ No verification email received.")
         return None
@@ -133,6 +133,6 @@ async def run_multiple_keys(n: int = 1):
 
 if __name__ == "__main__":
     try:
-        asyncio.run(run_multiple_keys(1))
+        asyncio.run(run_multiple_keys(2))
     except KeyboardInterrupt:
         print("\n🛑 Process interrupted by user.")

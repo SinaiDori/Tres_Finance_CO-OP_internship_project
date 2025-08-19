@@ -20,11 +20,8 @@ class APIKey(BaseModel):
     api_key: str
 
 
-controller = Controller(output_model=APIKey)
-llm = ChatOpenAI(model="gpt-4o")
-
 # To prevent endless-loops
-TIMEOUT_SECONDS = 300  # 5 minutes
+TIMEOUT_SECONDS = 10
 
 # Generating the keys using functions from temp_email.py
 
@@ -34,6 +31,8 @@ async def get_api() -> Union[str, None]:
     print(f"📧 Temporary email: {temp_email}")
     username = temp_email.split("@")[0]
     password = "StrongPass123!"
+    controller = Controller(output_model=APIKey)
+    llm = ChatOpenAI(model="gpt-4o")
 
     # 1. Sign-up
     signup_task = (
@@ -55,7 +54,7 @@ async def get_api() -> Union[str, None]:
 
     # 2. Email verification
     print("⏳ Waiting for confirmation email...")
-    email_data = wait_for_email_with_link(token, timeout=300, interval=10)
+    email_data = wait_for_email_with_link(token, timeout=30, interval=10)
     if not email_data or not email_data.get("link"):
         print("❌ No verification email received.")
         return None
@@ -74,7 +73,7 @@ async def get_api() -> Union[str, None]:
         f"- Username: {username}\n"
         f"- Password: {password}\n"
         f"2. Click on 'LOGIN'.\n"
-        f"4. Find the 'API Dashboard' button on the left side menu unser 'OTHERS' and click on it.\n"
+        f"4. Scroll a bit down to find the 'API Dashboard' button on the left side menu unser 'OTHERS' and click on it.\n"
         f"6. Find the '+ Add' button and click on it to create a new API key.\n"
         f"7. Enter 'Sinai' as the app name.\n"
         f"8. Click 'Create New API Key'.\n"
@@ -82,6 +81,7 @@ async def get_api() -> Union[str, None]:
         f"10. Return only the API key as JSON:\n"
         f"{{\"api_key\": \"<your_key_here>\"}}"
         f"11. Finish the task.\n"
+        f"GENERAL NOTE: If at any point you don't see what you are supposed to see - try to scroll a bit down or up.\n"
     )
 
     fresh_controller = Controller(output_model=APIKey)
@@ -165,6 +165,6 @@ async def run_multiple_keys(n: int = 1):
 
 if __name__ == "__main__":
     try:
-        asyncio.run(run_multiple_keys(1))
+        asyncio.run(run_multiple_keys(2))
     except KeyboardInterrupt:
         print("🛑 Interrupted by user.")

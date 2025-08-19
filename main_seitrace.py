@@ -17,7 +17,7 @@ class APIKey(BaseModel):
     api_key: str
 
 
-TIMEOUT_SECONDS = 180  # Timeout for each full flow
+TIMEOUT_SECONDS = 10
 
 # Generating the keys using functions from temp_email.py
 
@@ -121,6 +121,6 @@ async def run_multiple_keys(n: int = 1):
 
 if __name__ == "__main__":
     try:
-        asyncio.run(run_multiple_keys(1))
+        asyncio.run(run_multiple_keys(2))
     except KeyboardInterrupt:
         print("\n🛑 Process interrupted by user.")
