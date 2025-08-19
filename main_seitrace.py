@@ -3,7 +3,7 @@ import csv
 from typing import Optional, Union
 from dotenv import load_dotenv
 from pydantic import BaseModel
-from browser_use import Agent, Controller
+from browser_use import Agent, BrowserProfile, BrowserSession, Controller
 from browser_use.agent.views import ActionResult
 from langchain_openai import ChatOpenAI
 from temp_email_seitrace import create_account, wait_for_verification_code
@@ -30,6 +30,13 @@ async def get_api() -> Union[str, None]:
 
     controller = Controller(output_model=APIKey)
     llm = ChatOpenAI(model="gpt-4o")
+    browser_profile = BrowserProfile(
+        headless=False,  # Must be False to see the browser window
+        window_size={"width": 1650, "height": 800},  # Large window size
+        viewport={"width": 1650, "height": 800},
+        no_viewport=False,  # Explicitly enable viewport
+    )
+    browser_session = BrowserSession(browser_profile=browser_profile)
 
     def read_otp_from_mailbox() -> ActionResult:
         code = wait_for_verification_code(token)
@@ -74,7 +81,8 @@ async def get_api() -> Union[str, None]:
         f"17. Finish the task.\n"
     )
 
-    agent = Agent(task=task, llm=llm, controller=controller)
+    agent = Agent(task=task, llm=llm, controller=controller,
+                  browser_session=browser_session)
     result = await agent.run()
 
     data = result.final_result()
