@@ -3,7 +3,8 @@ import csv
 from typing import Union
 from dotenv import load_dotenv
 from pydantic import BaseModel
-from browser_use import Agent, Controller
+# from browser_use import Agent, Controller
+from browser_use import Agent, BrowserProfile, BrowserSession, Controller
 from langchain_openai import ChatOpenAI
 from temp_email_sub_scan import create_account, wait_for_email_with_link
 
@@ -20,6 +21,14 @@ class APIKey(BaseModel):
 
 controller = Controller(output_model=APIKey)
 llm = ChatOpenAI(model="gpt-4o")
+browser_profile = BrowserProfile(
+    headless=False,  # Must be False to see the browser window
+    window_size={"width": 1650, "height": 800},  # Large window size
+    viewport={"width": 1650, "height": 800},
+    no_viewport=False,  # Explicitly enable viewport
+)
+browser_session = BrowserSession(browser_profile=browser_profile)
+
 
 TIMEOUT_SECONDS = 300  # 5 minutes total
 
@@ -46,7 +55,7 @@ async def get_api() -> Union[str, None]:
         f"6. If you see a verification prompt or message, look for a 'Resend Email' button and click it and finish (DO NOT wait 2 minutes even if the webpage suggests it. After you've clicked the 'Resend Email' - finish the task right away).\n"
     )
 
-    await Agent(task=signup_task, llm=llm, controller=controller).run()
+    await Agent(task=signup_task, llm=llm, controller=controller, browser_session=browser_session).run()
     print("✅ Signup submitted.")
 
     # Step 2: Wait for verification email (up to 5 minutes)
@@ -81,7 +90,7 @@ async def get_api() -> Union[str, None]:
     )
 
     agent = Agent(task=verification_andapi_key_task,
-                  llm=llm, controller=controller)
+                  llm=llm, controller=controller, browser_session=browser_session)
     result = await agent.run()
     print("✅ Email verification completed, API key copied and ready to be returned.")
 
