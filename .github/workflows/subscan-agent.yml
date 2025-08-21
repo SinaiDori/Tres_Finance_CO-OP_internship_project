@@ -1,7 +1,7 @@
 name: subscan-agent
 
 on:
-  workflow_dispatch: {}   # run manually from the Actions tab
+  workflow_dispatch: {}
   # schedule:
   #   - cron: "0 5 * * *"   # optional: run daily at 05:00 UTC
 
@@ -27,30 +27,38 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb
 
+      # ✅ Cache pip wheels
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # ✅ Cache Playwright browsers
+      - name: Cache Playwright
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
       - name: Install Python deps
         run: |
           python -m pip install -U pip
           pip install -r requirements.txt
           python -m playwright install --with-deps chromium
 
-      # OPTION A (matches your local code: headless=False)
       - name: Run script (headful via Xvfb)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # add your other secrets here, e.g.:
-          # TEMPMAIL_TOKEN: ${{ secrets.TEMPMAIL_TOKEN }}
+          # add your other secrets here if needed
           PYTHONUNBUFFERED: "1"
         run: |
           set -e
-          # tee logs to a file so we can download them
           xvfb-run -a python main_sub_scan.py 2>&1 | tee run.log
-
-      # OPTION B (if you flip your BrowserProfile to headless=True, use this instead)
-      # - name: Run script (headless)
-      #   env:
-      #     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      #   run: |
-      #     python your_script.py 2>&1 | tee run.log
 
       - name: Upload output CSV (if created)
         uses: actions/upload-artifact@v4
