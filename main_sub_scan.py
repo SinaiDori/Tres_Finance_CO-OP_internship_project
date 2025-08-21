@@ -23,6 +23,7 @@ controller = Controller(output_model=APIKey)
 llm = ChatOpenAI(model="gpt-4o")
 browser_profile = BrowserProfile(
     headless=False,  # Must be False to see the browser window
+    chromium_sandbox=False,  # Disable sandbox for Browserless
     window_size={"width": 1650, "height": 800},  # Large window size
     viewport={"width": 1650, "height": 800},
     no_viewport=False,  # Explicitly enable viewport
