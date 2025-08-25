@@ -148,81 +148,29 @@ jobs:
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
         run: |
           set -e
-          if [ -f sub_scan_api_keys.csv ]; then
-            COUNT=$(wc -l < sub_scan_api_keys.csv | tr -d ' ')
-            HEADS=$(awk '{print substr($0,1,10) "..."}' sub_scan_api_keys.csv | paste -sd ', ' -)
-            TEXT="Subscan daily run ✅\nKeys generated: ${COUNT}\n(first 10 chars): ${HEADS}"
-          else
-            TEXT="Subscan daily run ⚠️  No CSV produced."
-          fi
-          export SLACK_TEXT="$TEXT"
-          JSON_PAYLOAD=$(python - <<'PY'
-          import json, os
-          print(json.dumps({"channel": os.environ["SLACK_CHANNEL_ID"], "text": os.environ["SLACK_TEXT"]}))
+          if [ -s sub_scan_api_keys.csv ]; then
+            JSON_PAYLOAD=$(python - <<'PY'
+          import os, json
+          ch = os.environ["SLACK_CHANNEL_ID"]
+          with open("sub_scan_api_keys.csv","r") as f:
+              lines = [ln.strip() for ln in f if ln.strip()]
+          text = lines[-1] if lines else "No API key produced."
+          print(json.dumps({"channel": ch, "text": text}))
           PY
           )
+              else
+                JSON_PAYLOAD=$(python - <<'PY'
+          import os, json
+          print(json.dumps({"channel": os.environ["SLACK_CHANNEL_ID"], "text": "No API key produced."}))
+          PY
+          )
+              fi
+          
               curl -sS -X POST https://slack.com/api/chat.postMessage \
                 -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
                 -H "Content-type: application/json; charset=utf-8" \
                 --data "$JSON_PAYLOAD"
         
-
-      - name: Slack upload CSV (external API via Python stdlib)
-        if: ${{ always() && hashFiles('sub_scan_api_keys.csv') != '' }}
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
-          FILE: sub_scan_api_keys.csv
-        run: |
-          set -e
-          python - <<'PY'
-          import os, json, urllib.request
-          
-          token   = os.environ["SLACK_BOT_TOKEN"]
-          channel = os.environ["SLACK_CHANNEL_ID"]
-          path    = os.environ["FILE"]
-          
-          with open(path, "rb") as f:
-              blob = f.read()
-          name = os.path.basename(path)
-          length = len(blob)
-          
-          # 1) Get pre-signed upload URL
-          req1 = urllib.request.Request(
-              "https://slack.com/api/files.getUploadURLExternal",
-              data=json.dumps({"filename": name, "length": length}).encode("utf-8"),
-              headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json; charset=utf-8"},
-              method="POST",
-          )
-          resp1 = json.loads(urllib.request.urlopen(req1).read().decode("utf-8"))
-          if not resp1.get("ok"):
-              raise SystemExit(f"getUploadURLExternal failed: {resp1}")
-          upload_url = resp1["upload_url"]
-          file_id    = resp1["file_id"]
-          
-          # 2) PUT bytes to the upload URL
-          req2 = urllib.request.Request(upload_url, data=blob, headers={"Content-Type": "application/octet-stream"}, method="PUT")
-          urllib.request.urlopen(req2).read()
-          
-          # 3) Finalize and share to channel
-          payload = {"files": [{"id": file_id, "title": name}], "channel_id": channel}
-          req3 = urllib.request.Request(
-              "https://slack.com/api/files.completeUploadExternal",
-              data=json.dumps(payload).encode("utf-8"),
-              headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json; charset=utf-8"},
-              method="POST",
-          )
-          resp3 = json.loads(urllib.request.urlopen(req3).read().decode("utf-8"))
-          if not resp3.get("ok"):
-              raise SystemExit(f"completeUploadExternal failed: {resp3}")
-          
-          print(f"✅ Uploaded {name} to Slack (file_id={file_id})")
-          PY
-              
-              
-              
-              
-
       # Optional: keep a backup artifact (auto-expires)
       - name: Upload artifact (CSV)
         if: ${{ always() }}
