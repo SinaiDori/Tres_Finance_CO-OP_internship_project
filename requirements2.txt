@@ -10,7 +10,8 @@ openai>=1.35,<2
 langchain-openai>=0.2.0,<1
 
 # Headless browser automation (required by browser-use)
-playwright==1.45.0
+# playwright>=1.48,<2
+patchright==1.52.5
 
 # Browser automation orchestrator
 browser-use==0.1.45

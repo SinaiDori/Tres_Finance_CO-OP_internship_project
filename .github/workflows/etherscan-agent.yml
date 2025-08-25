@@ -36,32 +36,31 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      # IMPORTANT: Do NOT cache Playwright browsers (can restore wrong revision)
+      # IMPORTANT: do NOT cache Playwright/patchright browsers to avoid revision mismatches
 
-      - name: Install Python deps + Playwright browsers
+      - name: Install Python deps + browsers
         run: |
           set -e
           python -m pip install -U pip
           pip install -r requirements2.txt
 
-          # Start fresh and install the exact Chromium for this Playwright version
+          # Start fresh and install the exact Chromium that patchright expects
           rm -rf ~/.cache/ms-playwright
-          python -m playwright install --with-deps --force chromium
+          python -m patchright install --with-deps --force chromium
 
-          # Sanity check: show versions and installed browser bin
+          # Sanity check: show installed browser binary
           python - <<'PY'
-          import os, glob, playwright
-          print("Playwright version:", playwright.__version__)
+          import os, glob
           bins = glob.glob(os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux/chrome"))
           print("Found Chromium bins:", bins)
           assert bins, "Chromium browser not installed"
           PY
-                      
-                # Optional: tiny smoke test to prove Chromium launches on the runner
-                - name: Playwright smoke test
-                  run: |
-                    python - <<'PY'
-          from playwright.sync_api import sync_playwright
+
+      # Optional: tiny smoke test to prove Chromium launches on the runner
+      - name: Patchright smoke test
+        run: |
+          python - <<'PY'
+          from patchright.sync_api import sync_playwright
           with sync_playwright() as p:
               b = p.chromium.launch(headless=True, args=["--no-sandbox","--disable-dev-shm-usage"])
               page = b.new_page()
@@ -88,27 +87,27 @@ jobs:
           set -e
           if [ -s etherscan_api_keys.csv ]; then
             JSON_PAYLOAD=$(python - <<'PY'
-            import os, json
-            ch = os.environ["SLACK_ETHERSCAN_CHANNEL_ID"]
-            with open("etherscan_api_keys.csv","r") as f:
-                keys = [ln.strip() for ln in f if ln.strip()]
-            text = "\n".join(keys) if keys else "No API keys produced."
-            print(json.dumps({"channel": ch, "text": text}))
-            PY
-            )
-                      else
-                        JSON_PAYLOAD=$(python - <<'PY'
-            import os, json
-            print(json.dumps({"channel": os.environ["SLACK_ETHERSCAN_CHANNEL_ID"], "text": "No API keys produced."}))
-            PY
-            )
-                      fi
-            
-                      curl -sS -X POST https://slack.com/api/chat.postMessage \
-                        -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
-                        -H "Content-type: application/json; charset=utf-8" \
-                        --data "$JSON_PAYLOAD"
-            
+          import os, json
+          ch = os.environ["SLACK_ETHERSCAN_CHANNEL_ID"]
+          with open("etherscan_api_keys.csv","r") as f:
+              keys = [ln.strip() for ln in f if ln.strip()]
+          text = "\n".join(keys) if keys else "No API keys produced."
+          print(json.dumps({"channel": ch, "text": text}))
+          PY
+          )
+                    else
+                      JSON_PAYLOAD=$(python - <<'PY'
+          import os, json
+          print(json.dumps({"channel": os.environ["SLACK_ETHERSCAN_CHANNEL_ID"], "text": "No API keys produced."}))
+          PY
+          )
+                    fi
+          
+                    curl -sS -X POST https://slack.com/api/chat.postMessage \
+                      -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+                      -H "Content-type: application/json; charset=utf-8" \
+                      --data "$JSON_PAYLOAD"
+
       # Optional: keep a backup artifact (auto-expires)
       - name: Upload artifact (CSV)
         if: ${{ always() }}
