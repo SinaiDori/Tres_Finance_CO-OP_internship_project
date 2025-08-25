@@ -103,7 +103,8 @@ jobs:
       - name: Install system deps (Xvfb for headful Chromium)
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb jq
+          sudo apt-get install -y xvfb
+        
 
       # Cache pip wheels
       - name: Cache pip
@@ -140,13 +141,13 @@ jobs:
           set -e
           xvfb-run -a python main_sub_scan.py 2>&1 | tee run.log
 
-      # Slack summary message
       - name: Slack message (summary)
         if: ${{ always() }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
         run: |
+          set -e
           if [ -f sub_scan_api_keys.csv ]; then
             COUNT=$(wc -l < sub_scan_api_keys.csv | tr -d ' ')
             HEADS=$(awk '{print substr($0,1,10) "..."}' sub_scan_api_keys.csv | paste -sd ', ' -)
@@ -154,43 +155,85 @@ jobs:
           else
             TEXT="Subscan daily run ⚠️  No CSV produced."
           fi
-          curl -sS -X POST https://slack.com/api/chat.postMessage \
-            -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
-            -H "Content-type: application/json; charset=utf-8" \
-            --data "$(jq -n --arg ch "$SLACK_CHANNEL_ID" --arg tx "$TEXT" '{channel:$ch,text:$tx}')"
+          export SLACK_TEXT="$TEXT"
+          JSON_PAYLOAD=$(python - <<'PY'
+          import json, os
+          print(json.dumps({"channel": os.environ["SLACK_CHANNEL_ID"], "text": os.environ["SLACK_TEXT"]}))
+          PY
+          )
+              curl -sS -X POST https://slack.com/api/chat.postMessage \
+                -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+                -H "Content-type: application/json; charset=utf-8" \
+                --data "$JSON_PAYLOAD"
+        
 
-      # Slack CSV upload via external upload API (new method)
       - name: Slack upload CSV
         if: ${{ always() && hashFiles('sub_scan_api_keys.csv') != '' }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
         run: |
+          set -e
           FILE="sub_scan_api_keys.csv"
           SIZE=$(wc -c < "$FILE" | tr -d ' ')
-
-          # 1) Get an upload URL + file_id
-          RESP=$(curl -sS -X POST https://slack.com/api/files.getUploadURLExternal \
-            -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
-            -H "Content-Type: application/json; charset=utf-8" \
-            --data "$(jq -n --arg fn "$FILE" --argjson len "$SIZE" '{filename:$fn, length:$len}')")
-          echo "$RESP"
-          [ "$(echo "$RESP" | jq -r '.ok')" = "true" ] || { echo "getUploadURLExternal failed"; exit 1; }
-          UPLOAD_URL=$(echo "$RESP" | jq -r '.upload_url')
-          FILE_ID=$(echo "$RESP" | jq -r '.file_id')
-
-          # 2) PUT the bytes to Slack’s pre-signed URL
-          curl -sS -X PUT -H "Content-Type: application/octet-stream" \
-            --data-binary @"$FILE" "$UPLOAD_URL"
-
-          # 3) Finalize and share to the channel
-          RESP2=$(curl -sS -X POST https://slack.com/api/files.completeUploadExternal \
-            -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
-            -H "Content-Type: application/json; charset=utf-8" \
-            --data "$(jq -n --arg id "$FILE_ID" --arg title "$FILE" --arg ch "$SLACK_CHANNEL_ID" \
-              '{files:[{id:$id,title:$title}], channel_id:$ch}')")
-          echo "$RESP2"
-          [ "$(echo "$RESP2" | jq -r '.ok')" = "true" ] || { echo "completeUploadExternal failed"; exit 1; }
+      
+          # 1) Request upload URL + file_id
+          REQ=$(python - <<'PY'
+          import json, os
+          print(json.dumps({"filename": os.environ["FILE"], "length": int(os.environ["SIZE"])}))
+          PY
+          )
+              RESP=$(curl -sS -X POST https://slack.com/api/files.getUploadURLExternal \
+                -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+                -H "Content-Type: application/json; charset=utf-8" \
+                --data "$REQ")
+              echo "$RESP"
+              OK=$(python - <<'PY'
+          import sys, json
+          print(json.load(sys.stdin).get("ok"))
+          PY
+          <<<"$RESP")
+              if [ "$OK" != "True" ]; then
+                echo "getUploadURLExternal failed"
+                exit 1
+              fi
+              UPLOAD_URL=$(python - <<'PY'
+          import sys, json
+          print(json.load(sys.stdin)["upload_url"])
+          PY
+          <<<"$RESP")
+              FILE_ID=$(python - <<'PY'
+          import sys, json
+          print(json.load(sys.stdin)["file_id"])
+          PY
+          <<<"$RESP")
+          
+              # 2) Upload the bytes
+              curl -sS -X PUT -H "Content-Type: application/octet-stream" \
+                --data-binary @"$FILE" "$UPLOAD_URL"
+          
+              # 3) Finalize & share to channel
+              FINAL_REQ=$(python - <<'PY'
+          import json, os
+          print(json.dumps({"files":[{"id": os.environ["FILE_ID"], "title": os.environ["FILE"]}],
+                            "channel_id": os.environ["SLACK_CHANNEL_ID"]}))
+          PY
+          )
+              RESP2=$(curl -sS -X POST https://slack.com/api/files.completeUploadExternal \
+                -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+                -H "Content-Type: application/json; charset=utf-8" \
+                --data "$FINAL_REQ")
+              echo "$RESP2"
+              OK2=$(python - <<'PY'
+          import sys, json
+          print(json.load(sys.stdin).get("ok"))
+          PY
+          <<<"$RESP2")
+              if [ "$OK2" != "True" ]; then
+                echo "completeUploadExternal failed"
+                exit 1
+              fi
+              
 
       # Optional: keep a backup artifact (auto-expires)
       - name: Upload artifact (CSV)
