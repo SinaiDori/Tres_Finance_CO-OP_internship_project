@@ -141,7 +141,36 @@ jobs:
           set -e
           xvfb-run -a python main_sub_scan.py 2>&1 | tee run.log
 
-      - name: Slack message (summary)
+      # - name: Slack message (summary)
+      #   if: ${{ always() }}
+      #   env:
+      #     SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      #     SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+      #   run: |
+      #     set -e
+      #     if [ -s sub_scan_api_keys.csv ]; then
+      #       JSON_PAYLOAD=$(python - <<'PY'
+      #     import os, json
+      #     ch = os.environ["SLACK_CHANNEL_ID"]
+      #     with open("sub_scan_api_keys.csv","r") as f:
+      #         lines = [ln.strip() for ln in f if ln.strip()]
+      #     text = lines[-1] if lines else "No API key produced."
+      #     print(json.dumps({"channel": ch, "text": text}))
+      #     PY
+      #     )
+      #         else
+      #           JSON_PAYLOAD=$(python - <<'PY'
+      #     import os, json
+      #     print(json.dumps({"channel": os.environ["SLACK_CHANNEL_ID"], "text": "No API key produced."}))
+      #     PY
+      #     )
+      #         fi
+          
+      #         curl -sS -X POST https://slack.com/api/chat.postMessage \
+      #           -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+      #           -H "Content-type: application/json; charset=utf-8" \
+      #           --data "$JSON_PAYLOAD"
+      - name: Slack message (all keys)
         if: ${{ always() }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -153,15 +182,15 @@ jobs:
           import os, json
           ch = os.environ["SLACK_CHANNEL_ID"]
           with open("sub_scan_api_keys.csv","r") as f:
-              lines = [ln.strip() for ln in f if ln.strip()]
-          text = lines[-1] if lines else "No API key produced."
+              keys = [ln.strip() for ln in f if ln.strip()]
+          text = "\n".join(keys) if keys else "No API keys produced."
           print(json.dumps({"channel": ch, "text": text}))
           PY
           )
               else
                 JSON_PAYLOAD=$(python - <<'PY'
           import os, json
-          print(json.dumps({"channel": os.environ["SLACK_CHANNEL_ID"], "text": "No API key produced."}))
+          print(json.dumps({"channel": os.environ["SLACK_CHANNEL_ID"], "text": "No API keys produced."}))
           PY
           )
               fi
@@ -170,6 +199,7 @@ jobs:
                 -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
                 -H "Content-type: application/json; charset=utf-8" \
                 --data "$JSON_PAYLOAD"
+
         
       # Optional: keep a backup artifact (auto-expires)
       - name: Upload artifact (CSV)
