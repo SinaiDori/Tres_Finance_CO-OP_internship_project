@@ -78,10 +78,14 @@ async def get_api() -> Union[str, None]:
         f"12. Click '+ Add API Key'.\n"
         f"13. Enter 'Sinai' as the app name.\n"
         f"14. Click 'Create new API Key'.\n"
-        f"15. Click the small Copy API Key Token icon to copy the API key.\n"
-        f"16. Return only the API key as JSON:\n"
+        f"15. Click 'Upgrade plan'.\n"
+        f"16. Click 'Get started now'.\n"
+        f"17. Click 'Confirm'.\n"
+        f"18. click 'Back to API keys management'.\n"
+        f"19. Click the small Copy API Key Token icon to copy the API key.\n"
+        f"20. Return only the API key as JSON:\n"
         f"{{\"api_key\": \"<your_key_here>\"}}"
-        f"17. Finish the task.\n"
+        f"21. Finish the task.\n"
     )
 
     agent = Agent(task=task, llm=llm, controller=controller,
