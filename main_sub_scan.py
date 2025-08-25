@@ -24,6 +24,8 @@ llm = ChatOpenAI(model="gpt-4o")
 browser_profile = BrowserProfile(
     headless=False,  # Must be False to see the browser window
     chromium_sandbox=False,  # Disable sandbox for Browserless
+    default_timeout=120000,  # 120s per action
+    default_navigation_timeout=120000,  # 120s per navigation
     window_size={"width": 1650, "height": 800},  # Large window size
     viewport={"width": 1650, "height": 800},
     no_viewport=False,  # Explicitly enable viewport
