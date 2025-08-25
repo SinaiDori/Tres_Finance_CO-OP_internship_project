@@ -1,3 +1,131 @@
+# name: etherscan-agent
+
+# on:
+#   workflow_dispatch: {}
+#   # schedule:
+#   #   - cron: "0 2 * * *"   # daily at 02:00 UTC
+
+# jobs:
+#   run:
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 30
+#     concurrency:
+#       group: etherscan-agent
+#       cancel-in-progress: false
+
+#     steps:
+#       - name: Checkout repo
+#         uses: actions/checkout@v4
+
+#       - name: Setup Python
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: '3.11'
+
+#       - name: Install system deps (Xvfb for headful Chromium)
+#         run: |
+#           sudo apt-get update
+#           sudo apt-get install -y xvfb
+
+#       # Cache pip wheels
+#       - name: Cache pip
+#         uses: actions/cache@v4
+#         with:
+#           path: ~/.cache/pip
+#           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements2.txt') }}
+#           restore-keys: |
+#             ${{ runner.os }}-pip-
+
+#       # IMPORTANT: do NOT cache Playwright/patchright browsers to avoid revision mismatches
+
+#       - name: Install Python deps + browsers
+#         run: |
+#           set -e
+#           python -m pip install -U pip
+#           pip install -r requirements2.txt
+
+#           # Start fresh and install the exact Chromium that patchright expects
+#           rm -rf ~/.cache/ms-playwright
+#           python -m patchright install --with-deps --force chromium
+
+#           # Sanity check: show installed browser binary
+#           python - <<'PY'
+#           import os, glob
+#           bins = glob.glob(os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux/chrome"))
+#           print("Found Chromium bins:", bins)
+#           assert bins, "Chromium browser not installed"
+#           PY
+
+#       # Optional: tiny smoke test to prove Chromium launches on the runner
+#       - name: Patchright smoke test
+#         run: |
+#           python - <<'PY'
+#           from patchright.sync_api import sync_playwright
+#           with sync_playwright() as p:
+#               b = p.chromium.launch(headless=True, args=["--no-sandbox","--disable-dev-shm-usage"])
+#               page = b.new_page()
+#               page.goto("https://example.com", timeout=60000)
+#               print("Smoke test page title:", page.title())
+#               b.close()
+#           PY
+
+#       # If your code is headless, replace this with: `python main_etherscan.py`
+#       - name: Run script (headful via Xvfb)
+#         env:
+#           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+#           PYTHONUNBUFFERED: "1"
+#         run: |
+#           set -e
+#           xvfb-run -a python main_etherscan.py 2>&1 | tee run.log
+
+#       - name: Slack message (all keys)
+#         if: ${{ always() }}
+#         env:
+#           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+#           SLACK_ETHERSCAN_CHANNEL_ID: ${{ secrets.SLACK_ETHERSCAN_CHANNEL_ID }}
+#         run: |
+#           set -e
+#           if [ -s etherscan_api_keys.csv ]; then
+#             JSON_PAYLOAD=$(python - <<'PY'
+#           import os, json
+#           ch = os.environ["SLACK_ETHERSCAN_CHANNEL_ID"]
+#           with open("etherscan_api_keys.csv","r") as f:
+#               keys = [ln.strip() for ln in f if ln.strip()]
+#           text = "\n".join(keys) if keys else "No API keys produced."
+#           print(json.dumps({"channel": ch, "text": text}))
+#           PY
+#           )
+#                     else
+#                       JSON_PAYLOAD=$(python - <<'PY'
+#           import os, json
+#           print(json.dumps({"channel": os.environ["SLACK_ETHERSCAN_CHANNEL_ID"], "text": "No API keys produced."}))
+#           PY
+#           )
+#                     fi
+          
+#                     curl -sS -X POST https://slack.com/api/chat.postMessage \
+#                       -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+#                       -H "Content-type: application/json; charset=utf-8" \
+#                       --data "$JSON_PAYLOAD"
+
+#       # Optional: keep a backup artifact (auto-expires)
+#       - name: Upload artifact (CSV)
+#         if: ${{ always() }}
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: etherscan_api_keys_${{ github.run_id }}
+#           path: etherscan_api_keys.csv
+#           if-no-files-found: ignore
+#           retention-days: 7
+
+#       - name: Upload full logs
+#         if: ${{ always() }}
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: run-log
+#           path: run.log
+#           if-no-files-found: ignore
+
 name: etherscan-agent
 
 on:
@@ -22,10 +150,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install system deps (Xvfb for headful Chromium)
+      - name: Install system deps (Xvfb + ffmpeg)
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb
+          sudo apt-get install -y xvfb ffmpeg
 
       # Cache pip wheels
       - name: Cache pip
@@ -36,7 +164,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      # IMPORTANT: do NOT cache Playwright/patchright browsers to avoid revision mismatches
+      # IMPORTANT: do NOT cache Playwright/patchright browsers
 
       - name: Install Python deps + browsers
         run: |
@@ -44,11 +172,11 @@ jobs:
           python -m pip install -U pip
           pip install -r requirements2.txt
 
-          # Start fresh and install the exact Chromium that patchright expects
+          # Fresh install of the exact Chromium that patchright expects
           rm -rf ~/.cache/ms-playwright
           python -m patchright install --with-deps --force chromium
 
-          # Sanity check: show installed browser binary
+          # Sanity check
           python - <<'PY'
           import os, glob
           bins = glob.glob(os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux/chrome"))
@@ -56,7 +184,7 @@ jobs:
           assert bins, "Chromium browser not installed"
           PY
 
-      # Optional: tiny smoke test to prove Chromium launches on the runner
+      # Optional: tiny smoke test to prove Chromium launches
       - name: Patchright smoke test
         run: |
           python - <<'PY'
@@ -68,15 +196,36 @@ jobs:
               print("Smoke test page title:", page.title())
               b.close()
           PY
-
-      # If your code is headless, replace this with: `python main_etherscan.py`
-      - name: Run script (headful via Xvfb)
+          
+      - name: Run script (recorded Xvfb session)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           PYTHONUNBUFFERED: "1"
         run: |
+          set -euo pipefail
+
+          # Start Xvfb display :99
+          Xvfb :99 -screen 0 1650x800x24 -ac +extension RANDR &
+          export DISPLAY=:99
+          sleep 2
+
+          # Start recording the virtual display
+          ffmpeg -y -nostdin -loglevel warning \
+            -f x11grab -framerate 20 -video_size 1650x800 -i $DISPLAY \
+            -c:v libx264 -preset veryfast -pix_fmt yuv420p run.mp4 &
+          REC_PID=$!
+
+          # Run your script and capture status
+          set +e
+          python main_etherscan.py 2>&1 | tee run.log
+          STATUS=$?
           set -e
-          xvfb-run -a python main_etherscan.py 2>&1 | tee run.log
+
+          # Stop recording cleanly
+          kill -INT $REC_PID || true
+          wait $REC_PID || true
+
+          exit $STATUS
 
       - name: Slack message (all keys)
         if: ${{ always() }}
@@ -125,3 +274,13 @@ jobs:
           name: run-log
           path: run.log
           if-no-files-found: ignore
+
+      - name: Upload session video
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: etherscan_run_video_${{ github.run_id }}
+          path: run.mp4
+          if-no-files-found: ignore
+          retention-days: 7
+

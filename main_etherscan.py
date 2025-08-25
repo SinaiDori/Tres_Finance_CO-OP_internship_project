@@ -36,7 +36,7 @@ async def get_api() -> Union[str, None]:
 
     # 1. Sign-up
     signup_task = (
-        f"You are creating a new account on Subscan. Follow these steps:\n"
+        f"You are creating a new account on Etherscan. Follow these steps:\n"
         f"1. Open https://etherscan.io/register\n"
         f"2. Complete the Sign-Up:\n"
         f"- Under 'Username' enter: {username}\n"
