@@ -1,3 +1,4 @@
+### This file lists the dependencies required to run the project for !Sub-scan! & !Seitrace!
 # Core runtime dependencies
 python-dotenv>=1.0,<2
 pydantic>=2.7,<3
@@ -12,9 +13,6 @@ langchain-openai>=0.2.0,<1
 playwright>=1.48,<2
 
 # Browser automation orchestrator
-# NOTE: main.py (Etherscan flow) comments that it requires browser-use==0.1.45
-#       main (2).py (SeiTrace) comments that it uses browser-use==0.2.5
-# Pick the version that matches the flow you're running.
 browser-use==0.2.5
 
 
