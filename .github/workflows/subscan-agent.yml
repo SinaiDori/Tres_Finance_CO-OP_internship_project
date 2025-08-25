@@ -176,6 +176,7 @@ jobs:
           set -e
           FILE="sub_scan_api_keys.csv"
           SIZE=$(wc -c < "$FILE" | tr -d ' ')
+          export FILE SIZE   # <-- make them visible to Python
       
           # 1) Request upload URL + file_id
           REQ=$(python - <<'PY'
@@ -207,6 +208,7 @@ jobs:
           print(json.load(sys.stdin)["file_id"])
           PY
           <<<"$RESP")
+              export FILE_ID     # <-- also export for the finalize step
           
               # 2) Upload the bytes
               curl -sS -X PUT -H "Content-Type: application/octet-stream" \
@@ -233,6 +235,7 @@ jobs:
                 echo "completeUploadExternal failed"
                 exit 1
               fi
+              
               
 
       # Optional: keep a backup artifact (auto-expires)
