@@ -1,4 +1,4 @@
-name: subscan-agent
+name: seitrace-agent
 
 on:
   workflow_dispatch: {}
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     concurrency:
-      group: subscan-agent
+      group: seitrace-agent
       cancel-in-progress: false
 
     steps:
@@ -61,20 +61,20 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: |
           set -e
-          xvfb-run -a python main_sub_scan.py 2>&1 | tee run.log
+          xvfb-run -a python main_seitrace.py 2>&1 | tee run.log
 
       - name: Slack message (all keys)
         if: ${{ always() }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          SLACK_SUB_SCAN_CHANNEL_ID: ${{ secrets.SLACK_SUB_SCAN_CHANNEL_ID }}
+          SLACK_SEITRACE_CHANNEL_ID: ${{ secrets.SLACK_SEITRACE_CHANNEL_ID }}
         run: |
           set -e
-          if [ -s sub_scan_api_keys.csv ]; then
+          if [ -s seitrace_api_keys.csv ]; then
             JSON_PAYLOAD=$(python - <<'PY'
           import os, json
-          ch = os.environ["SLACK_SUB_SCAN_CHANNEL_ID"]
-          with open("sub_scan_api_keys.csv","r") as f:
+          ch = os.environ["SLACK_SEITRACE_CHANNEL_ID"]
+          with open("seitrace_api_keys.csv","r") as f:
               keys = [ln.strip() for ln in f if ln.strip()]
           text = "\n".join(keys) if keys else "No API keys produced."
           print(json.dumps({"channel": ch, "text": text}))
@@ -83,7 +83,7 @@ jobs:
               else
                 JSON_PAYLOAD=$(python - <<'PY'
           import os, json
-          print(json.dumps({"channel": os.environ["SLACK_SUB_SCAN_CHANNEL_ID"], "text": "No API keys produced."}))
+          print(json.dumps({"channel": os.environ["SLACK_SEITRACE_CHANNEL_ID"], "text": "No API keys produced."}))
           PY
           )
               fi
@@ -99,8 +99,8 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: subscan_api_keys_${{ github.run_id }}
-          path: sub_scan_api_keys.csv
+          name: seitrace_api_keys_${{ github.run_id }}
+          path: seitrace_api_keys.csv
           if-no-files-found: ignore
           retention-days: 7
 
