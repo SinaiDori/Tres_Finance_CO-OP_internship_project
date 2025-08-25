@@ -50,7 +50,9 @@ jobs:
         run: |
           python -m pip install -U pip
           pip install -r requirements2.txt
-          python -m playwright install --with-deps chromium
+          # Ensure the correct Chromium for this Playwright version:
+          rm -rf ~/.cache/ms-playwright
+          python -m playwright install --with-deps --force chromium
 
       # If your code is headless, replace this with: `python your_script.py`
       - name: Run script (headful via Xvfb)
