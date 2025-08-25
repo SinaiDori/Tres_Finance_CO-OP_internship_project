@@ -135,7 +135,7 @@ on:
 
 jobs:
   run:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     timeout-minutes: 30
     concurrency:
       group: etherscan-agent
@@ -150,82 +150,55 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install system deps (Xvfb + ffmpeg)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb ffmpeg
-
-      # Cache pip wheels
+      # Cache pip wheels (macOS cache path)
       - name: Cache pip
         uses: actions/cache@v4
         with:
-          path: ~/.cache/pip
+          path: ~/Library/Caches/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements2.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      # IMPORTANT: do NOT cache Playwright/patchright browsers
-
+      # Install deps and the exact Chromium that patchright expects (no Playwright cache)
       - name: Install Python deps + browsers
         run: |
           set -e
           python -m pip install -U pip
           pip install -r requirements2.txt
-
-          # Fresh install of the exact Chromium that patchright expects
-          rm -rf ~/.cache/ms-playwright
-          python -m patchright install --with-deps --force chromium
-
-          # Sanity check
+          # start fresh to avoid revision mismatches
+          rm -rf ~/.cache/ms-playwright || true
+          rm -rf ~/Library/Caches/ms-playwright || true
+          python -m patchright install --force chromium
+          # sanity check for Mac Chromium binary
           python - <<'PY'
           import os, glob
-          bins = glob.glob(os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux/chrome"))
-          print("Found Chromium bins:", bins)
+          bins = glob.glob(os.path.expanduser("~/Library/Caches/ms-playwright/chromium-*/chrome-mac/Chromium.app/Contents/MacOS/Chromium"))
+          bins += glob.glob(os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux/chrome"))  # fallback if layout changes
+          print("Chromium bins:", bins)
           assert bins, "Chromium browser not installed"
           PY
 
-      # Optional: tiny smoke test to prove Chromium launches
+      # Quick smoke test to ensure Chromium launches on macOS
       - name: Patchright smoke test
         run: |
           python - <<'PY'
           from patchright.sync_api import sync_playwright
           with sync_playwright() as p:
-              b = p.chromium.launch(headless=True, args=["--no-sandbox","--disable-dev-shm-usage"])
+              b = p.chromium.launch(headless=True)  # no Xvfb needed on macOS
               page = b.new_page()
               page.goto("https://example.com", timeout=60000)
-              print("Smoke test page title:", page.title())
+              print("Smoke test title:", page.title())
               b.close()
           PY
-          
-      - name: Run script (recorded Xvfb session)
+
+      # Run your agent (headless)
+      - name: Run script (headless)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           PYTHONUNBUFFERED: "1"
         run: |
-          set -euo pipefail
-
-          # Start Xvfb display :99
-          Xvfb :99 -screen 0 1650x800x24 -ac +extension RANDR &
-          export DISPLAY=:99
-          sleep 2
-
-          # Start recording the virtual display
-          ffmpeg -y -nostdin -loglevel warning \
-            -f x11grab -framerate 20 -video_size 1650x800 -i $DISPLAY \
-            -c:v libx264 -preset veryfast -pix_fmt yuv420p run.mp4 &
-          REC_PID=$!
-
-          # Run your script and capture status
-          set +e
-          python main_etherscan.py 2>&1 | tee run.log
-          STATUS=$?
           set -e
-
-          # Stop recording cleanly
-          kill -INT $REC_PID || true
-          wait $REC_PID || true
-
-          exit $STATUS
+          python main_etherscan.py 2>&1 | tee run.log
 
       - name: Slack message (all keys)
         if: ${{ always() }}
@@ -257,7 +230,6 @@ jobs:
                       -H "Content-type: application/json; charset=utf-8" \
                       --data "$JSON_PAYLOAD"
 
-      # Optional: keep a backup artifact (auto-expires)
       - name: Upload artifact (CSV)
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -274,13 +246,3 @@ jobs:
           name: run-log
           path: run.log
           if-no-files-found: ignore
-
-      - name: Upload session video
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: etherscan_run_video_${{ github.run_id }}
-          path: run.mp4
-          if-no-files-found: ignore
-          retention-days: 7
-
