@@ -1,6 +1,6 @@
 from temp_email_etherscan import create_account, wait_for_email_with_link
 from langchain_openai import ChatOpenAI
-from browser_use import Agent, Controller
+from browser_use import Agent, Controller, BrowserProfile, BrowserSession
 import asyncio
 import csv
 import time
@@ -33,6 +33,27 @@ async def get_api() -> Union[str, None]:
     password = "StrongPass123!"
     controller = Controller(output_model=APIKey)
     llm = ChatOpenAI(model="gpt-4o")
+    profile = BrowserProfile(
+        headless=True,              # macOS runner: no Xvfb needed
+        chromium_sandbox=False,     # safer for CI
+        # name differs across versions; try context_options first, then context_kwargs
+        context_options={
+            "record_video_dir": "videos",
+            "record_video_size": {"width": 1280, "height": 720},
+        },
+    )
+
+# if your browser_use 0.1.45 doesn’t accept context_options, use this instead:
+# profile = BrowserProfile(
+#     headless=True,
+#     chromium_sandbox=False,
+#     context_kwargs={
+#         "record_video_dir": "videos",
+#         "record_video_size": {"width": 1280, "height": 720},
+#     },
+# )
+
+    session = BrowserSession(browser_profile=profile)
 
     # 1. Sign-up
     signup_task = (
@@ -49,7 +70,7 @@ async def get_api() -> Union[str, None]:
         "5. Scroll down and click 'Create an Account'.\n"
         "6. Finish the task.\n"
     )
-    await Agent(task=signup_task, llm=llm, controller=controller).run()
+    await Agent(task=signup_task, llm=llm, controller=controller, browser_session=session).run()
     print("✅ Signup submitted.")
 
     # 2. Email verification
@@ -87,7 +108,7 @@ async def get_api() -> Union[str, None]:
     fresh_controller = Controller(output_model=APIKey)
     fresh_llm = ChatOpenAI(model="gpt-4o")
     agent = Agent(task=verification_andapi_key_task,
-                  llm=fresh_llm, controller=fresh_controller)
+                  llm=fresh_llm, controller=fresh_controller, browser_session=session)
     result = await agent.run()
     print("✅ Email verification completed, API key copied and ready to be returned.")
 
