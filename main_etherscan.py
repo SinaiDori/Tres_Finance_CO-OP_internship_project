@@ -21,7 +21,7 @@ class APIKey(BaseModel):
 
 
 # To prevent endless-loops
-TIMEOUT_SECONDS = 10
+TIMEOUT_SECONDS = 1000
 
 # Generating the keys using functions from temp_email.py
 
