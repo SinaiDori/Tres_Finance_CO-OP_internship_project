@@ -1,9 +1,87 @@
+# name: subscan-agent
+
+# on:
+#   workflow_dispatch: {}
+#   # schedule:
+#   #   - cron: "0 5 * * *"   # optional: run daily at 05:00 UTC
+
+# jobs:
+#   run:
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 30
+#     concurrency:
+#       group: subscan-agent
+#       cancel-in-progress: false
+
+#     steps:
+#       - name: Checkout repo
+#         uses: actions/checkout@v4
+
+#       - name: Setup Python
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: '3.11'
+
+#       - name: Install system deps (Xvfb for headful Chromium)
+#         run: |
+#           sudo apt-get update
+#           sudo apt-get install -y xvfb
+
+#       # ✅ Cache pip wheels
+#       - name: Cache pip
+#         uses: actions/cache@v4
+#         with:
+#           path: ~/.cache/pip
+#           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+#           restore-keys: |
+#             ${{ runner.os }}-pip-
+
+#       # ✅ Cache Playwright browsers
+#       - name: Cache Playwright
+#         uses: actions/cache@v4
+#         with:
+#           path: ~/.cache/ms-playwright
+#           key: ${{ runner.os }}-playwright-${{ hashFiles('**/requirements.txt') }}
+#           restore-keys: |
+#             ${{ runner.os }}-playwright-
+
+#       - name: Install Python deps
+#         run: |
+#           python -m pip install -U pip
+#           pip install -r requirements.txt
+#           python -m playwright install --with-deps chromium
+
+#       - name: Run script (headful via Xvfb)
+#         env:
+#           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+#           # add your other secrets here if needed
+#           PYTHONUNBUFFERED: "1"
+#         run: |
+#           set -e
+#           xvfb-run -a python main_sub_scan.py 2>&1 | tee run.log
+
+#       - name: Upload output CSV (if created)
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: subscan_api_keys
+#           path: sub_scan_api_keys.csv
+#           if-no-files-found: ignore
+
+#       - name: Upload full logs
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: run-log
+#           path: run.log
+#           if-no-files-found: ignore
+
+
+
 name: subscan-agent
 
 on:
   workflow_dispatch: {}
-  # schedule:
-  #   - cron: "0 5 * * *"   # optional: run daily at 05:00 UTC
+  schedule:
+    - cron: "0 2 * * *"   # daily at 02:00 UTC
 
 jobs:
   run:
@@ -25,9 +103,9 @@ jobs:
       - name: Install system deps (Xvfb for headful Chromium)
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb
+          sudo apt-get install -y xvfb jq
 
-      # ✅ Cache pip wheels
+      # Cache pip wheels
       - name: Cache pip
         uses: actions/cache@v4
         with:
@@ -36,7 +114,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      # ✅ Cache Playwright browsers
+      # Cache Playwright browsers
       - name: Cache Playwright
         uses: actions/cache@v4
         with:
@@ -51,25 +129,84 @@ jobs:
           pip install -r requirements.txt
           python -m playwright install --with-deps chromium
 
+      # If your code is headless, replace this with: `python your_script.py`
       - name: Run script (headful via Xvfb)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # add your other secrets here if needed
+          # add any other secrets your code needs:
+          # TEMPMAIL_TOKEN: ${{ secrets.TEMPMAIL_TOKEN }}
           PYTHONUNBUFFERED: "1"
         run: |
           set -e
           xvfb-run -a python main_sub_scan.py 2>&1 | tee run.log
 
-      - name: Upload output CSV (if created)
+      # Slack summary message
+      - name: Slack message (summary)
+        if: ${{ always() }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+        run: |
+          if [ -f sub_scan_api_keys.csv ]; then
+            COUNT=$(wc -l < sub_scan_api_keys.csv | tr -d ' ')
+            HEADS=$(awk '{print substr($0,1,10) "..."}' sub_scan_api_keys.csv | paste -sd ', ' -)
+            TEXT="Subscan daily run ✅\nKeys generated: ${COUNT}\n(first 10 chars): ${HEADS}"
+          else
+            TEXT="Subscan daily run ⚠️  No CSV produced."
+          fi
+          curl -sS -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+            -H "Content-type: application/json; charset=utf-8" \
+            --data "$(jq -n --arg ch "$SLACK_CHANNEL_ID" --arg tx "$TEXT" '{channel:$ch,text:$tx}')"
+
+      # Slack CSV upload via external upload API (new method)
+      - name: Slack upload CSV
+        if: ${{ always() && hashFiles('sub_scan_api_keys.csv') != '' }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+        run: |
+          FILE="sub_scan_api_keys.csv"
+          SIZE=$(wc -c < "$FILE" | tr -d ' ')
+
+          # 1) Get an upload URL + file_id
+          RESP=$(curl -sS -X POST https://slack.com/api/files.getUploadURLExternal \
+            -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            --data "$(jq -n --arg fn "$FILE" --argjson len "$SIZE" '{filename:$fn, length:$len}')")
+          echo "$RESP"
+          [ "$(echo "$RESP" | jq -r '.ok')" = "true" ] || { echo "getUploadURLExternal failed"; exit 1; }
+          UPLOAD_URL=$(echo "$RESP" | jq -r '.upload_url')
+          FILE_ID=$(echo "$RESP" | jq -r '.file_id')
+
+          # 2) PUT the bytes to Slack’s pre-signed URL
+          curl -sS -X PUT -H "Content-Type: application/octet-stream" \
+            --data-binary @"$FILE" "$UPLOAD_URL"
+
+          # 3) Finalize and share to the channel
+          RESP2=$(curl -sS -X POST https://slack.com/api/files.completeUploadExternal \
+            -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            --data "$(jq -n --arg id "$FILE_ID" --arg title "$FILE" --arg ch "$SLACK_CHANNEL_ID" \
+              '{files:[{id:$id,title:$title}], channel_id:$ch}')")
+          echo "$RESP2"
+          [ "$(echo "$RESP2" | jq -r '.ok')" = "true" ] || { echo "completeUploadExternal failed"; exit 1; }
+
+      # Optional: keep a backup artifact (auto-expires)
+      - name: Upload artifact (CSV)
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: subscan_api_keys
+          name: subscan_api_keys_${{ github.run_id }}
           path: sub_scan_api_keys.csv
           if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload full logs
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: run-log
           path: run.log
           if-no-files-found: ignore
+
