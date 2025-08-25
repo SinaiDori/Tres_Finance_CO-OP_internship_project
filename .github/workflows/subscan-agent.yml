@@ -80,8 +80,8 @@ name: subscan-agent
 
 on:
   workflow_dispatch: {}
-  schedule:
-    - cron: "0 2 * * *"   # daily at 02:00 UTC
+  # schedule:
+  #   - cron: "0 2 * * *"   # daily at 02:00 UTC
 
 jobs:
   run:
