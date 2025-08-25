@@ -167,25 +167,58 @@ jobs:
                 --data "$JSON_PAYLOAD"
         
 
-      - name: Slack upload CSV (simple)
+      - name: Slack upload CSV (external API via Python stdlib)
         if: ${{ always() && hashFiles('sub_scan_api_keys.csv') != '' }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          FILE: sub_scan_api_keys.csv
         run: |
           set -e
-          RESP=$(curl -sS \
-            -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
-            -F "channels=${SLACK_CHANNEL_ID}" \
-            -F "initial_comment=CSV with today's keys" \
-            -F "file=@sub_scan_api_keys.csv;type=text/csv" \
-            https://slack.com/api/files.upload)
-          echo "$RESP"
-          python - <<'PY' <<<"$RESP"
-          import json, sys
-          data = json.load(sys.stdin)
-          assert data.get("ok"), f"files.upload failed: {data}"
+          python - <<'PY'
+          import os, json, urllib.request
+          
+          token   = os.environ["SLACK_BOT_TOKEN"]
+          channel = os.environ["SLACK_CHANNEL_ID"]
+          path    = os.environ["FILE"]
+          
+          with open(path, "rb") as f:
+              blob = f.read()
+          name = os.path.basename(path)
+          length = len(blob)
+          
+          # 1) Get pre-signed upload URL
+          req1 = urllib.request.Request(
+              "https://slack.com/api/files.getUploadURLExternal",
+              data=json.dumps({"filename": name, "length": length}).encode("utf-8"),
+              headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json; charset=utf-8"},
+              method="POST",
+          )
+          resp1 = json.loads(urllib.request.urlopen(req1).read().decode("utf-8"))
+          if not resp1.get("ok"):
+              raise SystemExit(f"getUploadURLExternal failed: {resp1}")
+          upload_url = resp1["upload_url"]
+          file_id    = resp1["file_id"]
+          
+          # 2) PUT bytes to the upload URL
+          req2 = urllib.request.Request(upload_url, data=blob, headers={"Content-Type": "application/octet-stream"}, method="PUT")
+          urllib.request.urlopen(req2).read()
+          
+          # 3) Finalize and share to channel
+          payload = {"files": [{"id": file_id, "title": name}], "channel_id": channel}
+          req3 = urllib.request.Request(
+              "https://slack.com/api/files.completeUploadExternal",
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json; charset=utf-8"},
+              method="POST",
+          )
+          resp3 = json.loads(urllib.request.urlopen(req3).read().decode("utf-8"))
+          if not resp3.get("ok"):
+              raise SystemExit(f"completeUploadExternal failed: {resp3}")
+          
+          print(f"✅ Uploaded {name} to Slack (file_id={file_id})")
           PY
+              
               
               
               
