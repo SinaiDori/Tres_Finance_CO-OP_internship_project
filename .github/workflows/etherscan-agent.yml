@@ -36,22 +36,38 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Install Python deps
+      # IMPORTANT: Do NOT cache Playwright browsers (can restore wrong revision)
+
+      - name: Install Python deps + Playwright browsers
         run: |
           set -e
           python -m pip install -U pip
           pip install -r requirements2.txt
 
-          # Ensure a fresh, correct Chromium for this Playwright version
+          # Start fresh and install the exact Chromium for this Playwright version
           rm -rf ~/.cache/ms-playwright
           python -m playwright install --with-deps --force chromium
 
-          # Sanity check: make sure the chrome binary exists
+          # Sanity check: show versions and installed browser bin
           python - <<'PY'
-          import os, glob
+          import os, glob, playwright
+          print("Playwright version:", playwright.__version__)
           bins = glob.glob(os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux/chrome"))
           print("Found Chromium bins:", bins)
           assert bins, "Chromium browser not installed"
+          PY
+                      
+                # Optional: tiny smoke test to prove Chromium launches on the runner
+                - name: Playwright smoke test
+                  run: |
+                    python - <<'PY'
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as p:
+              b = p.chromium.launch(headless=True, args=["--no-sandbox","--disable-dev-shm-usage"])
+              page = b.new_page()
+              page.goto("https://example.com", timeout=60000)
+              print("Smoke test page title:", page.title())
+              b.close()
           PY
 
       # If your code is headless, replace this with: `python main_etherscan.py`
