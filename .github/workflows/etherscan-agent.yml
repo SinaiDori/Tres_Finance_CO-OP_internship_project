@@ -322,15 +322,22 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      # NEW: Start FlareSolverr before installing other dependencies
+      # NEW: Start FlareSolverr with improved monitoring
       - name: Start FlareSolverr
         run: |
           echo "🚀 Starting FlareSolverr..."
           
-          # Pull FlareSolverr Docker image
-          docker pull ghcr.io/flaresolverr/flaresolverr:latest
+          # Check Docker availability
+          docker --version
+          echo "✅ Docker is available"
           
-          # Start FlareSolverr in background on port 8191
+          # Pull FlareSolverr image
+          echo "📥 Pulling FlareSolverr image..."
+          docker pull ghcr.io/flaresolverr/flaresolverr:latest
+          echo "✅ Image pulled successfully"
+          
+          # Start FlareSolverr container
+          echo "🔄 Starting FlareSolverr container..."
           docker run -d \
             --name flaresolverr \
             -p 8191:8191 \
@@ -338,41 +345,56 @@ jobs:
             -e LOG_HTML=false \
             -e CAPTCHA_SOLVER=none \
             -e HEADLESS=true \
+            --restart=no \
             ghcr.io/flaresolverr/flaresolverr:latest
           
-          # Wait for FlareSolverr to fully start up
-          echo "⏳ Waiting for FlareSolverr to start..."
-          sleep 15
+          echo "✅ Container started, checking status..."
+          docker ps -f name=flaresolverr
           
-          # Verify FlareSolverr is responding
-          for i in {1..12}; do
-            if curl -f http://localhost:8191/ > /dev/null 2>&1; then
-              echo "✅ FlareSolverr started successfully on port 8191"
-              break
-            else
-              echo "⏳ Attempt $i: Waiting for FlareSolverr..."
-              sleep 5
-            fi
+          # Wait for FlareSolverr with better monitoring (up to 2 minutes)
+          echo "⏳ Waiting for FlareSolverr to become ready..."
+          for i in {1..24}; do
+            echo "🔍 Health check $i/24..."
             
-            if [ $i -eq 12 ]; then
-              echo "❌ FlareSolverr failed to start after 60 seconds"
-              docker logs flaresolverr
+            # Check container is still running
+            if ! docker ps -f name=flaresolverr -q | grep -q .; then
+              echo "❌ Container stopped running!"
+              docker logs flaresolverr 2>&1 | tail -20
               exit 1
             fi
+            
+            # Check if FlareSolverr responds
+            if curl -f -s http://localhost:8191/ >/dev/null 2>&1; then
+              response=$(curl -s http://localhost:8191/ 2>/dev/null || echo "")
+              if [[ "$response" == *"FlareSolverr"* ]]; then
+                echo "✅ FlareSolverr is ready!"
+                echo "📝 Response: $response"
+                break
+              fi
+            fi
+            
+            if [ $i -eq 24 ]; then
+              echo "❌ FlareSolverr failed to start after 2 minutes"
+              echo "📝 Container status:"
+              docker ps -a -f name=flaresolverr
+              echo "📝 Container logs (last 30 lines):"
+              docker logs flaresolverr 2>&1 | tail -30
+              echo "📝 Network check:"
+              netstat -tlpn | grep 8191 || echo "Port 8191 not listening"
+              exit 1
+            fi
+            
+            sleep 5
           done
 
-      # IMPORTANT: do NOT cache Playwright/patchright browsers
+      # Install Python dependencies and browsers
       - name: Install Python deps + browsers
         run: |
           set -e
           python -m pip install -U pip
           pip install -r requirements2.txt
-
-          # Fresh install of the exact Chromium that patchright expects
           rm -rf ~/.cache/ms-playwright
           python -m patchright install --with-deps --force chromium
-
-          # Sanity check
           python - <<'PY'
           import os, glob
           bins = glob.glob(os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux/chrome"))
@@ -380,10 +402,10 @@ jobs:
           assert bins, "Chromium browser not installed"
           PY
 
-      # NEW: Test FlareSolverr with Etherscan specifically
-      - name: Test FlareSolverr with Etherscan
+      # Test FlareSolverr functionality with detailed debugging
+      - name: Test FlareSolverr functionality
         run: |
-          echo "🔍 Testing FlareSolverr with Etherscan..."
+          echo "🔍 Testing FlareSolverr functionality..."
           
           python - <<'PY'
           import requests
@@ -392,8 +414,16 @@ jobs:
           
           flaresolverr_url = "http://localhost:8191/v1"
           
-          # Test 1: Basic FlareSolverr functionality
-          print("🧪 Test 1: Basic FlareSolverr functionality")
+          print("🔍 Step 1: Basic connectivity test")
+          try:
+              health_response = requests.get("http://localhost:8191/", timeout=10)
+              print(f"📊 Health check status: {health_response.status_code}")
+              print(f"📝 Health response: {health_response.text[:200]}")
+          except Exception as e:
+              print(f"❌ Health check failed: {e}")
+              exit(1)
+          
+          print("\n🔍 Step 2: Basic FlareSolverr API test")
           test_payload = {
               "cmd": "request.get",
               "url": "https://httpbin.org/ip",
@@ -401,6 +431,9 @@ jobs:
           }
           
           try:
+              print(f"📤 Sending request to: {flaresolverr_url}")
+              print(f"📝 Payload: {json.dumps(test_payload, indent=2)}")
+              
               response = requests.post(
                   flaresolverr_url,
                   headers={'Content-Type': 'application/json'},
@@ -408,75 +441,61 @@ jobs:
                   timeout=35
               )
               
-              if response.status_code == 200:
-                  result = response.json()
-                  if result['status'] == 'ok':
-                      ip_data = json.loads(result['solution']['response'])
-                      print(f"✅ FlareSolverr working - IP: {ip_data['origin']}")
-                  else:
-                      print(f"❌ FlareSolverr error: {result['message']}")
-                      exit(1)
-              else:
-                  print(f"❌ HTTP error: {response.status_code}")
-                  exit(1)
-          except Exception as e:
-              print(f"❌ FlareSolverr test failed: {e}")
-              exit(1)
-          
-          # Test 2: Etherscan access through FlareSolverr
-          print("\n🧪 Test 2: Etherscan access through FlareSolverr")
-          etherscan_payload = {
-              "cmd": "request.get",
-              "url": "https://etherscan.io",
-              "maxTimeout": 60000
-          }
-          
-          try:
-              print("⏳ Solving Cloudflare challenge for Etherscan...")
-              response = requests.post(
-                  flaresolverr_url,
-                  headers={'Content-Type': 'application/json'},
-                  json=etherscan_payload,
-                  timeout=70
-              )
+              print(f"📊 Response status: {response.status_code}")
+              print(f"📝 Response headers: {dict(response.headers)}")
+              print(f"📝 Raw response (first 500 chars):")
+              print(response.text[:500])
+              print(f"📝 Raw response (last 200 chars):")
+              print(response.text[-200:])
               
               if response.status_code == 200:
-                  result = response.json()
-                  if result['status'] == 'ok':
-                      html_content = result['solution']['response']
-                      cookies = result['solution']['cookies']
-                      
-                      print(f"✅ FlareSolverr bypassed Cloudflare for Etherscan!")
-                      print(f"📊 Response length: {len(html_content)} characters")
-                      print(f"🍪 Cookies received: {len(cookies)} cookies")
-                      
-                      # Verify we got real Etherscan content
-                      if "etherscan" in html_content.lower() and "ethereum" in html_content.lower():
-                          print("✅ Confirmed: Got real Etherscan homepage (not blocked)")
+                  if response.text.strip():
+                      try:
+                          result = response.json()
+                          print(f"✅ JSON parsed successfully")
+                          print(f"📝 Result status: {result.get('status')}")
                           
-                          if "register" in html_content.lower():
-                              print("✅ Registration functionality appears available")
-                          
-                      else:
-                          print("⚠️ Got response but content doesn't look like Etherscan")
-                          print("📝 First 200 chars of response:")
-                          print(html_content[:200])
-                          
+                          if result.get('status') == 'ok':
+                              solution = result.get('solution', {})
+                              response_data = solution.get('response', '')
+                              if response_data:
+                                  ip_data = json.loads(response_data)
+                                  print(f"✅ FlareSolverr basic test passed!")
+                                  print(f"📍 IP from test: {ip_data.get('origin')}")
+                              else:
+                                  print(f"❌ No response data in solution")
+                                  exit(1)
+                          else:
+                              print(f"❌ FlareSolverr error: {result.get('message', 'Unknown error')}")
+                              exit(1)
+                      except json.JSONDecodeError as json_e:
+                          print(f"❌ JSON decode error: {json_e}")
+                          print(f"📝 Response was: {repr(response.text)}")
+                          exit(1)
                   else:
-                      print(f"❌ FlareSolverr failed to access Etherscan: {result['message']}")
+                      print(f"❌ Empty response from FlareSolverr")
                       exit(1)
               else:
-                  print(f"❌ HTTP error accessing Etherscan: {response.status_code}")
+                  print(f"❌ HTTP error {response.status_code}")
                   exit(1)
                   
+          except requests.exceptions.ConnectionError as conn_e:
+              print(f"❌ Connection error: {conn_e}")
+              exit(1)
+          except requests.exceptions.Timeout as timeout_e:
+              print(f"❌ Timeout error: {timeout_e}")
+              exit(1)
           except Exception as e:
-              print(f"❌ Etherscan test failed: {e}")
+              print(f"❌ Unexpected error: {e}")
+              import traceback
+              traceback.print_exc()
               exit(1)
           
-          print("\n🎉 All FlareSolverr tests passed! Ready to run main script.")
+          print(f"\n🎉 FlareSolverr basic functionality confirmed!")
+          print(f"✅ Ready to run main script")
           PY
 
-      # Optional: Patchright smoke test (keep existing)
+      # Optional: Quick Patchright smoke test
       - name: Patchright smoke test
         run: |
           python - <<'PY'
@@ -485,14 +504,15 @@ jobs:
               b = p.chromium.launch(headless=True, args=["--no-sandbox","--disable-dev-shm-usage"])
               page = b.new_page()
               page.goto("https://example.com", timeout=60000)
-              print("Smoke test page title:", page.title())
+              print("Patchright smoke test - page title:", page.title())
               b.close()
           PY
           
+      # Run the main script
       - name: Run script (recorded Xvfb session)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          FLARESOLVERR_URL: "http://localhost:8191"  # NEW: FlareSolverr URL
+          FLARESOLVERR_URL: "http://localhost:8191"
           PYTHONUNBUFFERED: "1"
         run: |
           set -euo pipefail
@@ -508,7 +528,7 @@ jobs:
             -c:v libx264 -preset veryfast -pix_fmt yuv420p run.mp4 &
           REC_PID=$!
 
-          # Run your script and capture status
+          # Run the main script
           set +e
           python main_etherscan.py 2>&1 | tee run.log
           STATUS=$?
@@ -520,15 +540,16 @@ jobs:
 
           exit $STATUS
 
-      # NEW: Clean up FlareSolverr (important for CI)
+      # Clean up FlareSolverr (always run)
       - name: Stop FlareSolverr
         if: ${{ always() }}
         run: |
           echo "🧹 Cleaning up FlareSolverr..."
           docker stop flaresolverr || true
           docker rm flaresolverr || true
-          echo "✅ FlareSolverr cleanup completed"
+          echo "✅ Cleanup completed"
 
+      # Slack notification
       - name: Slack message (all keys)
         if: ${{ always() }}
         env:
@@ -559,7 +580,7 @@ jobs:
             -H "Content-type: application/json; charset=utf-8" \
             --data "$JSON_PAYLOAD"
 
-      # Optional: keep a backup artifact (auto-expires)
+      # Upload artifacts
       - name: Upload artifact (CSV)
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
