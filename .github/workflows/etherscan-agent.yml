@@ -458,12 +458,26 @@ jobs:
                           if result.get('status') == 'ok':
                               solution = result.get('solution', {})
                               response_data = solution.get('response', '')
-                              if response_data:
-                                  ip_data = json.loads(response_data)
-                                  print(f"✅ FlareSolverr basic test passed!")
-                                  print(f"📍 IP from test: {ip_data.get('origin')}")
+                              user_agent = solution.get('userAgent', '')
+                              url = solution.get('url', '')
+                              
+                              print(f"✅ FlareSolverr basic test passed!")
+                              print(f"📍 URL accessed: {url}")
+                              print(f"🤖 User agent: {user_agent}")
+                              print(f"📄 Response contains IP data: {'origin' in response_data}")
+                              
+                              # Verify the response contains the expected content
+                              if response_data and 'origin' in response_data:
+                                  # Extract IP from HTML response (it's in <pre> tags)
+                                  import re
+                                  ip_match = re.search(r'"origin":\s*"([^"]+)"', response_data)
+                                  if ip_match:
+                                      ip_address = ip_match.group(1)
+                                      print(f"📍 Extracted IP: {ip_address}")
+                                  print(f"✅ FlareSolverr successfully retrieved web content!")
                               else:
-                                  print(f"❌ No response data in solution")
+                                  print(f"❌ Response doesn't contain expected content")
+                                  print(f"📝 Response preview: {response_data[:200]}...")
                                   exit(1)
                           else:
                               print(f"❌ FlareSolverr error: {result.get('message', 'Unknown error')}")
