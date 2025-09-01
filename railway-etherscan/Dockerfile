@@ -1,52 +1,37 @@
-# Use Python 3.11 (matches your working GitHub Actions setup)
+# syntax=docker/dockerfile:1
 FROM python:3.11-slim
 
-# Install system dependencies (same as your GitHub Actions)
-RUN apt-get update && apt-get install -y \
-    xvfb \
-    ffmpeg \
-    wget \
-    gnupg \
-    unzip \
-    curl \
+ENV DEBIAN_FRONTEND=noninteractive
+
+# System deps that Chromium/Playwright need on Debian 13 (trixie)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    xvfb ffmpeg ca-certificates curl unzip \
+    libasound2 libatk1.0-0 libatk-bridge2.0-0 libcairo2 libcups2 \
+    libdrm2 libgbm1 libglib2.0-0 libgtk-3-0 libnspr4 libnss3 \
+    libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 libxext6 \
+    libxfixes3 libxkbcommon0 libxrandr2 libxrender1 libxshmfence1 libxtst6 \
+    gstreamer1.0-libav gstreamer1.0-plugins-good gstreamer1.0-plugins-base \
+    fonts-liberation fonts-ubuntu fonts-unifont \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy requirements first (for better caching)
+# If your file is named requirements2.txt:
 COPY requirements2.txt .
+RUN pip install --no-cache-dir -r requirements2.txt
 
-# Install Python deps (same as your GitHub Actions)
-RUN python -m pip install -U pip && \
-    pip install -r requirements2.txt
-
-# Install browsers using the EXACT same process as your working GitHub Actions
+# Download the Chromium binary, but DON'T try to apt-get OS deps here
 RUN rm -rf ~/.cache/ms-playwright && \
-    python -m patchright install --with-deps --force chromium
+    python -m patchright install chromium
 
-# Sanity check (same as your GitHub Actions)
-RUN python -c "import os, glob; bins = glob.glob(os.path.expanduser('~/.cache/ms-playwright/chromium-*/chrome-linux/chrome')); print('Found Chromium bins:', bins); assert bins, 'Chromium browser not installed'"
-
-# Patchright smoke test (same as your GitHub Actions)
-RUN python -c "from patchright.sync_api import sync_playwright; p = sync_playwright(); b = p.chromium.launch(headless=True, args=['--no-sandbox','--disable-dev-shm-usage']); page = b.new_page(); page.goto('https://example.com', timeout=60000); print('Smoke test page title:', page.title()); b.close(); p.stop()"
-
-# Copy application code
+# Project files
 COPY . .
 
-# Set environment variables (same as your GitHub Actions)
 ENV PYTHONUNBUFFERED=1
 ENV DISPLAY=:99
 
-# Create startup script (mirrors your GitHub Actions process)
-RUN echo '#!/bin/bash\n\
-    set -euo pipefail\n\
-    # Start Xvfb display\n\
-    Xvfb :99 -screen 0 1650x800x24 -ac +extension RANDR &\n\
-    export DISPLAY=:99\n\
-    sleep 2\n\
-    # Run the script\n\
-    python main_etherscan.py' > start.sh && chmod +x start.sh
+# Small launcher (headful under Xvfb, which Cloudflare often prefers)
+RUN printf '#!/bin/bash\nset -euo pipefail\nXvfb :99 -screen 0 1650x800x24 -ac +extension RANDR &\nexport DISPLAY=:99\nsleep 2\npython main_etherscan.py\n' > /app/start.sh \
+    && chmod +x /app/start.sh
 
-# Run the application
-CMD ["./start.sh"]
+CMD ["/app/start.sh"]
