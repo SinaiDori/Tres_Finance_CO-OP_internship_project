@@ -128,6 +128,6 @@ async def run_multiple_keys(n: int = 1):
 
 if __name__ == "__main__":
     try:
-        asyncio.run(run_multiple_keys(10))
+        asyncio.run(run_multiple_keys(1))
     except KeyboardInterrupt:
         print("\n🛑 Process interrupted by user.")
