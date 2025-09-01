@@ -11,8 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 libxext6 \
     libxfixes3 libxkbcommon0 libxrandr2 libxrender1 libxshmfence1 libxtst6 \
     gstreamer1.0-libav gstreamer1.0-plugins-good gstreamer1.0-plugins-base \
-    fonts-liberation fonts-ubuntu fonts-unifont \
+    fonts-liberation fonts-unifont fonts-noto-core fonts-noto-color-emoji fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
+
 
 WORKDIR /app
 
