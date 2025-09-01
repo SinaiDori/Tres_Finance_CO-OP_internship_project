@@ -8,6 +8,15 @@ RUN apt-get update && apt-get install -y \
     unzip \
     curl \
     xvfb \
+    libnss3-dev \
+    libatk-bridge2.0-dev \
+    libdrm-dev \
+    libxcomposite-dev \
+    libxdamage-dev \
+    libxrandr-dev \
+    libgbm-dev \
+    libxss-dev \
+    libasound2-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Chrome browser (updated method for newer Ubuntu)
@@ -26,9 +35,10 @@ COPY requirements2.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements2.txt
 
-# Install Playwright browsers (required for browser-use)
-RUN playwright install chromium
-RUN playwright install-deps
+# Install Playwright browsers with explicit environment variables
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN python -m playwright install chromium
+RUN python -m playwright install-deps chromium
 
 # Copy application code
 COPY . .
