@@ -26,6 +26,10 @@ COPY requirements2.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements2.txt
 
+# Install Playwright browsers (required for browser-use)
+RUN playwright install chromium
+RUN playwright install-deps
+
 # Copy application code
 COPY . .
 
