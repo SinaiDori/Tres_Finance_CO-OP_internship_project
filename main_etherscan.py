@@ -165,7 +165,7 @@ async def run_multiple_keys(n: int = 1):
 
 if __name__ == "__main__":
     try:
-        asyncio.run(run_multiple_keys(1))
+        asyncio.run(run_multiple_keys(10))
     except KeyboardInterrupt:
         print("🛑 Interrupted by user.")
 # from temp_email_etherscan import create_account, wait_for_email_with_link
