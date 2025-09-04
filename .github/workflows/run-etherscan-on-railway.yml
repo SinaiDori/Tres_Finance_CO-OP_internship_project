@@ -3,8 +3,8 @@ name: run-etherscan-on-railway
 on:
   workflow_dispatch: {}
   # schedule:
-  #   - cron: "0 5 * 4-10 *"      # 08:00 Jerusalem (Apr–Oct)
-  #   - cron: "0 6 * 1-3,11-12 *" # 08:00 Jerusalem (Jan–Mar, Nov–Dec)
+  #   - cron: "0 5 * 4-10 *"      # 08:00 Jerusalem (Apr–Oct, UTC+3)
+  #   - cron: "0 6 * 1-3,11-12 *" # 08:00 Jerusalem (Jan–Mar, Nov–Dec, UTC+2)
 
 jobs:
   deploy:
@@ -15,10 +15,11 @@ jobs:
       cancel-in-progress: false
 
     env:
+      # Set this secret in: Repo → Settings → Secrets and variables → Actions
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-      NOVNC: "0"
-      RAILWAY_ROOT: "railway-etherscan"              # folder with your railway.json / Dockerfile
-      RAILWAY_SERVICE: "Tres_Finance_CO-OP_internship_project"  # exact service name in Railway
+      NOVNC: "0"  # optional: skip noVNC for scheduled runs
+      RAILWAY_ROOT: "railway-etherscan"   # folder with Dockerfile/railway.json
+      RAILWAY_SERVICE: "Tres_Finance_CO-OP_internship_project"  # EXACT service name
 
     steps:
       - name: Checkout
@@ -35,15 +36,14 @@ jobs:
       - name: Show CLI version
         run: railway --version
 
-      - name: Login to Railway
-        run: railway login --token "$RAILWAY_TOKEN"
+      # No login step needed – the CLI reads RAILWAY_TOKEN automatically in CI
 
-      - name: (Optional) Set runtime variables for this service
+      - name: (Optional) Set runtime variables on the service
         run: |
           railway variables set NOVNC="$NOVNC" --service "$RAILWAY_SERVICE" || true
           # railway variables set ALLOW_RUN="1" --service "$RAILWAY_SERVICE" || true
 
-      - name: Deploy current repo to Railway (build + run start.sh)
+      - name: Deploy current repo (build + run start.sh)
         run: |
           railway up \
             --service "$RAILWAY_SERVICE" \
