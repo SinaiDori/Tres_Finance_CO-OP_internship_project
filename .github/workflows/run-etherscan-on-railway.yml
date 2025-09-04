@@ -15,17 +15,15 @@ jobs:
       cancel-in-progress: false
 
     env:
-      # Set this secret in: Repo → Settings → Secrets and variables → Actions
-      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-      NOVNC: "0"  # optional: skip noVNC for scheduled runs
-      RAILWAY_ROOT: "railway-etherscan"   # folder with Dockerfile/railway.json
-      RAILWAY_SERVICE: "Tres_Finance_CO-OP_internship_project"  # EXACT service name
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}   # <-- Project token
+      NOVNC: "0"                                    # optional for headless cron runs
+      RAILWAY_SERVICE: "Tres_Finance_CO-OP_internship_project"  # exact service name
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node (for CLI install)
+      - name: Setup Node (for Railway CLI)
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -36,16 +34,13 @@ jobs:
       - name: Show CLI version
         run: railway --version
 
-      # No login step needed – the CLI reads RAILWAY_TOKEN automatically in CI
-
-      - name: (Optional) Set runtime variables on the service
+      # (Optional) set/update a runtime variable on the service for this env
+      - name: Set runtime variables on the service
         run: |
-          railway variables set NOVNC="$NOVNC" --service "$RAILWAY_SERVICE" || true
-          # railway variables set ALLOW_RUN="1" --service "$RAILWAY_SERVICE" || true
+          railway variables set --service "$RAILWAY_SERVICE" NOVNC="$NOVNC" || true
 
-      - name: Deploy current repo (build + run start.sh)
+      # Build & run using the subfolder as project root
+      - name: Deploy current repo to Railway (build + run start.sh)
+        working-directory: ./railway-etherscan
         run: |
-          railway up \
-            --service "$RAILWAY_SERVICE" \
-            --root "$RAILWAY_ROOT" \
-            --detach
+          railway up --service "$RAILWAY_SERVICE" --detach --ci
