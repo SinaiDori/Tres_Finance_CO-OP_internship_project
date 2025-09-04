@@ -2,8 +2,8 @@ name: subscan-agent
 
 on:
   workflow_dispatch: {}
-  # schedule:
-  #   - cron: "0 2 * * *"   # daily at 02:00 UTC
+  schedule:
+    - cron: "47 8 * * *"   # daily 08:47 UTC = 11:47 Jerusalem (while DST)
 
 jobs:
   run:
