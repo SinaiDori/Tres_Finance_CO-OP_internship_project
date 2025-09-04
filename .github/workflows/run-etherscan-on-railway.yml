@@ -2,10 +2,9 @@ name: run-etherscan-on-railway
 
 on:
   workflow_dispatch: {}
-#   schedule:
-#     # 08:00 Jerusalem year-round (month split: IDT UTC+3 vs IST UTC+2)
-#     - cron: "0 5 * 4-10 *"     # Apr–Oct: 05:00 UTC = 08:00 IDT
-#     - cron: "0 6 * 1-3,11-12 *" # Jan–Mar, Nov–Dec: 06:00 UTC = 08:00 IST
+  # schedule:
+  #   - cron: "0 5 * 4-10 *"      # 08:00 Jerusalem (Apr–Oct)
+  #   - cron: "0 6 * 1-3,11-12 *" # 08:00 Jerusalem (Jan–Mar, Nov–Dec)
 
 jobs:
   deploy:
@@ -16,36 +15,37 @@ jobs:
       cancel-in-progress: false
 
     env:
-      # Set these in repo Settings → Secrets and variables → Actions
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-      # Optional: make the container skip noVNC during scheduled runs
       NOVNC: "0"
-      # If you added the ALLOW_RUN gate in start.sh, set it here:
-      # ALLOW_RUN: "1"
-
-      # Adjust to your repo layout / service name:
-      RAILWAY_ROOT: "railway-etherscan"     # matches your “Root Directory” in the screenshot
+      RAILWAY_ROOT: "railway-etherscan"              # folder with your railway.json / Dockerfile
       RAILWAY_SERVICE: "Tres_Finance_CO-OP_internship_project"  # exact service name in Railway
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node (for CLI install)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Install Railway CLI
-        run: curl -fsSL https://railway.app/install.sh | sh
+        run: npm i -g @railway/cli
+
+      - name: Show CLI version
+        run: railway --version
 
       - name: Login to Railway
-        run: ~/.railway/bin/railway login --token "$RAILWAY_TOKEN"
+        run: railway login --token "$RAILWAY_TOKEN"
 
-      - name: Set runtime env (optional)
-        # These become service variables for this deployment; comment out if you manage them in Railway UI
+      - name: (Optional) Set runtime variables for this service
         run: |
-          ~/.railway/bin/railway variables set NOVNC="$NOVNC" --service "$RAILWAY_SERVICE" || true
-          # ~/.railway/bin/railway variables set ALLOW_RUN="$ALLOW_RUN" --service "$RAILWAY_SERVICE" || true
+          railway variables set NOVNC="$NOVNC" --service "$RAILWAY_SERVICE" || true
+          # railway variables set ALLOW_RUN="1" --service "$RAILWAY_SERVICE" || true
 
       - name: Deploy current repo to Railway (build + run start.sh)
         run: |
-          ~/.railway/bin/railway up \
+          railway up \
             --service "$RAILWAY_SERVICE" \
             --root "$RAILWAY_ROOT" \
             --detach
