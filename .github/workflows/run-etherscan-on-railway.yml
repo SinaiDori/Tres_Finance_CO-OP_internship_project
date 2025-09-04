@@ -39,16 +39,6 @@ jobs:
         run: |
           railway variables set --service "$RAILWAY_SERVICE" NOVNC="$NOVNC" || true
 
-      - name: Verify repo layout
-        run: |
-          pwd
-          ls -la
-          test -d ./railway-etherscan || (echo "❌ ./railway-etherscan not found"; exit 1)
-
-      - name: Deploy current repo to Railway (build + run start.sh)
-        run: |
-          railway up ./railway-etherscan \
-            --service "$RAILWAY_SERVICE" \
-            --detach \
-            --ci \
-            --path-as-root
+      - name: Deploy to Railway
+        run: railway up --service "$RAILWAY_SERVICE" --detach --ci
+        
