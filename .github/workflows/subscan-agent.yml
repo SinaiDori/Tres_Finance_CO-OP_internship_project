@@ -3,7 +3,10 @@ name: subscan-agent
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "47 8 * * *"   # daily 08:47 UTC = 11:47 Jerusalem (while DST)
+    # Apr–Oct (IDT, UTC+3): 08:00 local = 05:00 UTC
+    - cron: "0 5 * 4-10 *"
+    # Jan–Mar & Nov–Dec (IST, UTC+2): 08:00 local = 06:00 UTC
+    - cron: "0 6 * 1-3,11-12 *"
 
 jobs:
   run:
