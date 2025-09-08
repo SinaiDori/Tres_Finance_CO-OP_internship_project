@@ -29,9 +29,12 @@ COPY requirements2.txt constraints-subscan.txt /app/
 RUN python -m pip install -U pip \
     && pip install --no-cache-dir -r /app/requirements2.txt -c /app/constraints-subscan.txt
 
-# Install the EXACT Chromium required by your pinned playwright/patchright
-RUN rm -rf ~/.cache/ms-playwright \
-    && python -m patchright install --with-deps --force chromium
+# Skip Playwright's host req checks (we preinstalled the libs)
+ENV PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1
+
+RUN rm -rf ~/.cache/ms-playwright && \
+    python -m patchright install --force chromium
+
 
 # Project files (only subscan service)
 COPY . /app/
