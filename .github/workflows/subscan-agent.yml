@@ -62,10 +62,6 @@ jobs:
           # add any other secrets your code needs:
           # TEMPMAIL_TOKEN: ${{ secrets.TEMPMAIL_TOKEN }}
           PYTHONUNBUFFERED: "1"
-          # Chrome/Playwright flags for CI environment
-          PLAYWRIGHT_CHROMIUM_ARGS: "--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-gpu --no-first-run --disable-default-apps"
-          CHROMIUM_SANDBOX: "false"
-          CI: "true"
         run: |
           set -e
           xvfb-run -a python main_sub_scan.py 2>&1 | tee run.log
