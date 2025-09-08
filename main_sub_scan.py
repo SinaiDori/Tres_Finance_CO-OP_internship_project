@@ -196,6 +196,7 @@ import csv
 import subprocess
 from pathlib import Path
 from typing import Union
+import os
 
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -204,6 +205,10 @@ from browser_use import Agent, Controller
 from browser_use.agent.views import ActionResult
 from langchain_openai import ChatOpenAI
 from temp_email_sub_scan import create_account, wait_for_email_with_link
+
+if os.getenv('CI') or os.getenv('GITHUB_ACTIONS'):
+    os.environ['CHROMIUM_SANDBOX'] = 'false'
+    os.environ['PLAYWRIGHT_CHROMIUM_ARGS'] = '--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-gpu'
 
 # Use browser-use version 0.1.45
 load_dotenv()
