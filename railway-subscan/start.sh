@@ -17,6 +17,10 @@ x11vnc -display :99 -nopw -forever -shared -rfbport 5900 >/tmp/x11vnc.log 2>&1 &
 # 5) Give services a moment to come up
 sleep 2
 
+# Identify the container's outbound (NAT) IP
+PUBLIC_IP="$(curl -s https://api.ipify.org || true)"
+echo "Egress public IP: ${PUBLIC_IP:-unknown}"
+
 # 6) Run your script (HEADFUL), capture status
 set +e
 python /app/main_sub_scan.py 2>&1 | tee /tmp/agent.log
