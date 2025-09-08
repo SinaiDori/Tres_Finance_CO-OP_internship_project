@@ -24,19 +24,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# ------- choose ONE of the two blocks below -------
-
-# (A) If you created a fully pinned requirements-subscan.txt:
-COPY requirements-subscan.txt /app/requirements.txt
+# Python deps (requirements + constraints for the browser stack)
+COPY requirements2.txt constraints-subscan.txt /app/
 RUN python -m pip install -U pip \
-    && pip install --no-cache-dir -r /app/requirements.txt
-
-# (B) If you prefer to keep requirements2.txt + constraints, use this instead:
-# COPY requirements2.txt constraints-subscan.txt /app/
-# RUN python -m pip install -U pip \
-#  && pip install --no-cache-dir -r /app/requirements2.txt -c /app/constraints-subscan.txt
-
-# ------- end choose-one block -------
+    && pip install --no-cache-dir -r /app/requirements2.txt -c /app/constraints-subscan.txt
 
 # Install the EXACT Chromium required by your pinned playwright/patchright
 RUN rm -rf ~/.cache/ms-playwright \
