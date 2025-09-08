@@ -112,7 +112,7 @@ def extract_first_link(text):
     return None
 
 
-def wait_for_email_with_link(token, timeout=300, interval=10):
+def wait_for_email_with_link(token, timeout=300, interval=10) -> str:
     """Poll inbox until a message arrives or timeout hits"""
     elapsed = 0
     print(
@@ -141,17 +141,13 @@ def wait_for_email_with_link(token, timeout=300, interval=10):
                 print(
                     text_content[:500] + "..." if len(text_content) > 500 else text_content)
 
-                if html_content:
-                    print("📨 Raw email HTML content:")
-                    print(
-                        html_content[:500] + "..." if len(html_content) > 500 else html_content)
-
                 # Try to extract link from both text and HTML
                 link = extract_first_link(
                     text_content) or extract_first_link(html_content)
 
                 if link:
                     print(f"✅ Found verification link: {link}")
+                    return link
                 else:
                     print("⚠️ No verification link found in email content")
 

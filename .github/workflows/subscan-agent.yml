@@ -45,7 +45,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('**/requirements1.txt') }}
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/requirements2.txt') }}
           restore-keys: |
             ${{ runner.os }}-playwright-
 
