@@ -116,11 +116,12 @@ async def get_api() -> Union[str, None]:
         f"15. Click 'Upgrade plan'.\n"
         f"16. Click 'Get started now'.\n"
         f"17. Click 'Confirm'.\n"
-        f"18. click 'Back to API keys management'.\n"
-        f"19. Click the small Copy API Key Token icon to copy the API key.\n"
-        f"20. Return only the API key as JSON:\n"
+        f"18. Wait for the page to load (wait at least 20 seconds).\n"
+        f"19. Click 'Back to API keys management'.\n"
+        f"20. Click the small Copy API Key Token icon to copy the API key (scroll up if you can't find it).\n"
+        f"21. Return only the API key as JSON:\n"
         f'{{"api_key": "<your_key_here>"}}'
-        f"21. Finish the task.\n"
+        f"22. Finish the task.\n"
     )
 
     # Ensure we close the session even if the agent fails mid-run
@@ -178,6 +179,6 @@ async def run_multiple_keys(n: int = 1):
 
 if __name__ == "__main__":
     try:
-        asyncio.run(run_multiple_keys(10))
+        asyncio.run(run_multiple_keys(1))
     except KeyboardInterrupt:
         print("\n🛑 Process interrupted by user.")

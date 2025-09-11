@@ -28,7 +28,7 @@ jobs:
       - name: Install system deps (Xvfb for headful Chromium)
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb
+          sudo apt-get install -y xvfb ffmpeg
         
 
       # Cache pip wheels
@@ -55,16 +55,58 @@ jobs:
           pip install -r requirements1.txt
           python -m playwright install --with-deps chromium
 
-      # If your code is headless, replace this with: `python your_script.py`
-      - name: Run script (headful via Xvfb)
+      # # If your code is headless, replace this with: `python your_script.py`
+      # - name: Run script (headful via Xvfb)
+      #   env:
+      #     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      #     # add any other secrets your code needs:
+      #     ANONADDY_SUBDOMAIN: sinai
+      #     ANONADDY_TLD: anonaddy.com
+      #     IMAP_HOST: imap.gmail.com
+      #     IMAP_PORT: 993
+      #     IMAP_USER: ${{ secrets.IMAP_USER }}
+      #     IMAP_PASS: ${{ secrets.IMAP_PASS }}
+      #     PYTHONUNBUFFERED: "1"
+      #   run: |
+      #     set -e
+      #     xvfb-run -a python main_seitrace.py 2>&1 | tee run.log
+      - name: Run script (recorded Xvfb session)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # add any other secrets your code needs:
-          # TEMPMAIL_TOKEN: ${{ secrets.TEMPMAIL_TOKEN }}
+          # AnonAddy + Gmail IMAP (from our earlier setup)
+          ANONADDY_SUBDOMAIN: sinai
+          ANONADDY_TLD: anonaddy.com
+          IMAP_HOST: imap.gmail.com
+          IMAP_PORT: 993
+          IMAP_USER: ${{ secrets.IMAP_USER }}
+          IMAP_PASS: ${{ secrets.IMAP_PASS }}
           PYTHONUNBUFFERED: "1"
         run: |
-          set -e
+          set -euo pipefail
+        
+          # Start Xvfb display :99 (match resolution with ffmpeg)
+          Xvfb :99 -screen 0 1650x800x24 -ac +extension RANDR &
+          export DISPLAY=:99
+          sleep 2
+        
+          # Start recording the virtual display
+          ffmpeg -y -nostdin -loglevel warning \
+            -f x11grab -framerate 20 -video_size 1650x800 -i $DISPLAY \
+            -c:v libx264 -preset veryfast -pix_fmt yuv420p run.mp4 &
+          REC_PID=$!
+        
+          # Run your script and capture status
+          set +e
           xvfb-run -a python main_seitrace.py 2>&1 | tee run.log
+          STATUS=${PIPESTATUS[0]}
+          set -e
+        
+          # Stop recording cleanly
+          kill -INT $REC_PID || true
+          wait $REC_PID || true
+        
+          exit $STATUS
+        
 
       - name: Slack message (all keys)
         if: ${{ always() }}
@@ -114,4 +156,21 @@ jobs:
           name: run-log
           path: run.log
           if-no-files-found: ignore
+          
+      - name: Upload session video
+        if: ${{ always() }}
+        id: upload_video
+        uses: actions/upload-artifact@v4
+        with:
+          name: seitrace_run_video_${{ github.run_id }}
+          path: run.mp4
+          if-no-files-found: warn
+          retention-days: 7
+        
+      - name: Add video link to summary
+        if: ${{ always() }}
+        run: |
+          echo "## Run video" >> $GITHUB_STEP_SUMMARY
+          echo "[Watch/download on GitHub](${{ steps.upload_video.outputs.artifact-url }})" >> $GITHUB_STEP_SUMMARY
+        
 
