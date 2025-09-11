@@ -70,10 +70,15 @@ jobs:
       #   run: |
       #     set -e
       #     xvfb-run -a python main_seitrace.py 2>&1 | tee run.log
+      - name: Install system deps (Xvfb + ffmpeg + WM)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb ffmpeg fluxbox
+            
       - name: Run script (recorded Xvfb session)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # AnonAddy + Gmail IMAP (from our earlier setup)
+          # AnonAddy + Gmail IMAP
           ANONADDY_SUBDOMAIN: sinai
           ANONADDY_TLD: anonaddy.com
           IMAP_HOST: imap.gmail.com
@@ -84,28 +89,37 @@ jobs:
         run: |
           set -euo pipefail
         
-          # Start Xvfb display :99 (match resolution with ffmpeg)
-          Xvfb :99 -screen 0 1650x800x24 -ac +extension RANDR &
+          # Start ONE X server on :99 (match ffmpeg size)
           export DISPLAY=:99
+          Xvfb $DISPLAY -screen 0 1650x800x24 -ac +extension RANDR &
+          XVFB_PID=$!
           sleep 2
         
-          # Start recording the virtual display
+          # Lightweight window manager so Chromium can map/focus windows
+          fluxbox >/dev/null 2>&1 &
+          WM_PID=$!
+          sleep 1
+        
+          # Start recording THIS display
           ffmpeg -y -nostdin -loglevel warning \
             -f x11grab -framerate 20 -video_size 1650x800 -i $DISPLAY \
-            -c:v libx264 -preset veryfast -pix_fmt yuv420p run.mp4 &
+            -c:v libx264 -preset veryfast -pix_fmt yuv420p -movflags +faststart \
+            run.mp4 >/dev/null 2>&1 &
           REC_PID=$!
         
-          # Run your script and capture status
+          # IMPORTANT: run your script DIRECTLY (NO xvfb-run here)
           set +e
-          xvfb-run -a python main_seitrace.py 2>&1 | tee run.log
+          python main_seitrace.py 2>&1 | tee run.log
           STATUS=${PIPESTATUS[0]}
           set -e
         
-          # Stop recording cleanly
-          kill -INT $REC_PID || true
-          wait $REC_PID || true
+          # Stop recorder and X cleanly
+          kill -INT "$REC_PID" || true
+          wait "$REC_PID" || true
+          kill "$WM_PID" "$XVFB_PID" || true
         
           exit $STATUS
+
         
 
       - name: Slack message (all keys)
