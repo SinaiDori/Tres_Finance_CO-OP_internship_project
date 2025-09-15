@@ -25,11 +25,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install system deps (Xvfb for headful Chromium)
+      - name: Install system deps (Xvfb + ffmpeg + WM)
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb ffmpeg
-        
+          sudo apt-get install -y xvfb ffmpeg fluxbox
 
       # Cache pip wheels
       - name: Cache pip
@@ -55,32 +54,10 @@ jobs:
           pip install -r requirements1.txt
           python -m playwright install --with-deps chromium
 
-      # # If your code is headless, replace this with: `python your_script.py`
-      # - name: Run script (headful via Xvfb)
-      #   env:
-      #     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      #     # add any other secrets your code needs:
-      #     ANONADDY_SUBDOMAIN: sinai
-      #     ANONADDY_TLD: anonaddy.com
-      #     IMAP_HOST: imap.gmail.com
-      #     IMAP_PORT: 993
-      #     IMAP_USER: ${{ secrets.IMAP_USER }}
-      #     IMAP_PASS: ${{ secrets.IMAP_PASS }}
-      #     PYTHONUNBUFFERED: "1"
-      #   run: |
-      #     set -e
-      #     xvfb-run -a python main_seitrace.py 2>&1 | tee run.log
-      - name: Install system deps (Xvfb + ffmpeg + WM)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb ffmpeg fluxbox
-            
       - name: Run script (recorded Xvfb session)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # AnonAddy + Gmail IMAP
-          ANONADDY_SUBDOMAIN: sinai
-          ANONADDY_TLD: anonaddy.com
+          # Gmail IMAP for email capture (rotate between gmail/googlemail with dotted local)
           IMAP_HOST: imap.gmail.com
           IMAP_PORT: 993
           IMAP_USER: ${{ secrets.IMAP_USER }}
@@ -88,39 +65,37 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: |
           set -euo pipefail
-        
+
           # Start ONE X server on :99 (match ffmpeg size)
           export DISPLAY=:99
           Xvfb $DISPLAY -screen 0 1650x800x24 -ac +extension RANDR &
           XVFB_PID=$!
           sleep 2
-        
+
           # Lightweight window manager so Chromium can map/focus windows
           fluxbox >/dev/null 2>&1 &
           WM_PID=$!
           sleep 1
-        
+
           # Start recording THIS display
           ffmpeg -y -nostdin -loglevel warning \
             -f x11grab -framerate 20 -video_size 1650x800 -i $DISPLAY \
             -c:v libx264 -preset veryfast -pix_fmt yuv420p -movflags +faststart \
             run.mp4 >/dev/null 2>&1 &
           REC_PID=$!
-        
+
           # IMPORTANT: run your script DIRECTLY (NO xvfb-run here)
           set +e
           python main_seitrace.py 2>&1 | tee run.log
           STATUS=${PIPESTATUS[0]}
           set -e
-        
+
           # Stop recorder and X cleanly
           kill -INT "$REC_PID" || true
           wait "$REC_PID" || true
           kill "$WM_PID" "$XVFB_PID" || true
-        
-          exit $STATUS
 
-        
+          exit $STATUS
 
       - name: Slack message (all keys)
         if: ${{ always() }}
@@ -139,20 +114,19 @@ jobs:
           print(json.dumps({"channel": ch, "text": text}))
           PY
           )
-              else
-                JSON_PAYLOAD=$(python - <<'PY'
+          else
+            JSON_PAYLOAD=$(python - <<'PY'
           import os, json
           print(json.dumps({"channel": os.environ["SLACK_SEITRACE_CHANNEL_ID"], "text": "No API keys produced."}))
           PY
           )
-              fi
-          
-              curl -sS -X POST https://slack.com/api/chat.postMessage \
-                -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
-                -H "Content-type: application/json; charset=utf-8" \
-                --data "$JSON_PAYLOAD"
+          fi
 
-        
+          curl -sS -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+            -H "Content-type: application/json; charset=utf-8" \
+            --data "$JSON_PAYLOAD"
+
       # Optional: keep a backup artifact (auto-expires)
       - name: Upload artifact (CSV)
         if: ${{ always() }}
@@ -170,7 +144,7 @@ jobs:
           name: run-log
           path: run.log
           if-no-files-found: ignore
-          
+
       - name: Upload session video
         if: ${{ always() }}
         id: upload_video
@@ -180,11 +154,9 @@ jobs:
           path: run.mp4
           if-no-files-found: warn
           retention-days: 7
-        
+
       - name: Add video link to summary
         if: ${{ always() }}
         run: |
           echo "## Run video" >> $GITHUB_STEP_SUMMARY
           echo "[Watch/download on GitHub](${{ steps.upload_video.outputs.artifact-url }})" >> $GITHUB_STEP_SUMMARY
-        
-

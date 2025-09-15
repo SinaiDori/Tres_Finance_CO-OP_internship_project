@@ -113,15 +113,16 @@ async def get_api() -> Union[str, None]:
         f"12. Click '+ Add API Key'.\n"
         f"13. Enter 'Sinai' as the app name.\n"
         f"14. Click 'Create new API Key'.\n"
-        f"15. Click 'Upgrade plan'.\n"
-        f"16. Click 'Get started now'.\n"
-        f"17. Click 'Confirm'.\n"
-        f"18. Wait for the page to load (wait at least 20 seconds).\n"
-        f"19. Click 'Back to API keys management'.\n"
-        f"20. Click the small Copy API Key Token icon to copy the API key (scroll up if you can't find it).\n"
-        f"21. Return only the API key as JSON:\n"
+        f"15. Wait 10 seconds.\n"
+        f"16. Click 'Upgrade plan'.\n"
+        f"17. Click 'Get started now'.\n"
+        f"18. Click 'Confirm'.\n"
+        f"19. Wait for the page to load (wait at least 20 seconds).\n"
+        f"20. Click 'Back to API keys management'.\n"
+        f"21. Click the small Copy API Key Token icon to copy the API key (scroll up if you can't find it).\n"
+        f"22. Return only the API key as JSON:\n"
         f'{{"api_key": "<your_key_here>"}}'
-        f"22. Finish the task.\n"
+        f"23. Finish the task.\n"
     )
 
     # Ensure we close the session even if the agent fails mid-run

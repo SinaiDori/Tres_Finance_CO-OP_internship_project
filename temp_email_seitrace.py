@@ -110,7 +110,6 @@ import time
 import uuid
 import imaplib
 import email
-from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone
 from typing import Tuple, Optional, List
 
@@ -145,19 +144,52 @@ def generate_random_credentials():
     return None, None
 
 
+def _dot_variant(local: str, salt_hex: str) -> str:
+    """
+    Insert dots between characters using bits from salt (no adjacent dots).
+    Guarantees at least one dot. Gmail ignores dots; services see uniqueness.
+    """
+    n = len(local)
+    bits = int(salt_hex, 16)
+    positions = []  # indices 1..n-1 where we insert a dot BEFORE char at i
+    for i in range(1, n):
+        take = bool(bits & 1)
+        bits >>= 1
+        if take and (not positions or i - positions[-1] > 1):
+            positions.append(i)
+    if not positions:
+        positions = [max(1, n // 2)]
+    out = []
+    for i, ch in enumerate(local):
+        if i in positions:
+            out.append(".")
+        out.append(ch)
+    return "".join(out)
+
+
 def create_account() -> Tuple[str, str]:
     """
-    Create a unique AnonAddy standard alias for this run and return:
-      (alias_email, token)
-    'token' encodes alias + start time for filtering.
-    Requires:
-      ANONADDY_SUBDOMAIN (e.g., 'sinai')
-      ANONADDY_TLD (optional, default 'anonaddy.com')
+    Return a fresh address for this run and a token:
+      - If CATCHALL_DOMAIN is set -> seitrace-<id>@<domain>
+      - Else: rotate each run between dotted @gmail.com and dotted @googlemail.com
+              (no '+' so Seitrace doesn't block the trial)
     """
-    sub = _env("ANONADDY_SUBDOMAIN")
-    tld = os.environ.get("ANONADDY_TLD", "anonaddy.com")
-    local = f"seitrace-{uuid.uuid4().hex[:10]}"
-    alias = f"{local}@{sub}.{tld}"
+    domain = os.environ.get("CATCHALL_DOMAIN", "").strip()
+
+    if domain:
+        local_id = f"seitrace-{uuid.uuid4().hex[:10]}"
+        alias = f"{local_id}@{domain}"
+    else:
+        user = _env("IMAP_USER")                  # e.g., sinai1775@gmail.com
+        base_local, _base_host = user.split("@", 1)
+        salt = uuid.uuid4().hex                   # per-run randomness
+        dotted = _dot_variant(base_local, salt)   # unique dot pattern
+
+        # rotate host per run using the last hex nibble
+        use_googlemail = (int(salt[-1], 16) % 2) == 1
+        host = "googlemail.com" if use_googlemail else "gmail.com"
+        alias = f"{dotted}@{host}"
+
     token = f"{alias}|{_now_ms()}"
     return alias, token
 
@@ -207,21 +239,35 @@ def _alias_in_headers(envelope: email.message.Message, alias: str) -> bool:
 
 def _internaldate_ts(M, msg_id: bytes) -> Optional[int]:
     """
-    Get the IMAP INTERNALDATE for msg_id and return epoch ms.
-    INTERNALDATE is set by the server upon receipt; more reliable than Date header.
+    Return INTERNALDATE (epoch ms). Handles both tuple and bytes responses.
     """
     try:
         typ, data = M.fetch(msg_id, "(INTERNALDATE)")
-        if typ != "OK" or not data or not data[0]:
+        if typ != "OK" or not data:
             return None
-        raw = data[0][1].decode("utf-8", errors="ignore")
+
+        # data can be:
+        #   [(b'1 (INTERNALDATE "11-Sep-2025 10:48:37 +0000")', b'')]
+        # or [b'1 (INTERNALDATE "11-Sep-2025 10:48:37 +0000")']
+        if isinstance(data[0], tuple):
+            line = data[0][0].decode("utf-8", errors="ignore")
+        else:
+            line = data[0].decode("utf-8", errors="ignore")
+
         import re as _re
-        m = _re.search(r'INTERNALDATE "([^"]+)"', raw)
-        if not m:
-            return None
-        dt_str = m.group(1)  # e.g., 11-Sep-2025 10:48:37 +0000
-        dt = datetime.strptime(dt_str, "%d-%b-%Y %H:%M:%S %z")
-        return int(dt.timestamp() * 1000)
+        m = _re.search(r'INTERNALDATE "([^"]+)"', line)
+        if m:
+            dt = datetime.strptime(m.group(1), "%d-%b-%Y %H:%M:%S %z")
+            return int(dt.timestamp() * 1000)
+
+        # Fallback: use imaplib helper if format differs
+        try:
+            tup = imaplib.Internaldate2tuple(line.encode("utf-8"))
+            if tup:
+                return int(time.mktime(tup)) * 1000
+        except Exception:
+            pass
+        return None
     except Exception:
         return None
 
