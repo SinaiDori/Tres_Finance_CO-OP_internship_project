@@ -455,60 +455,84 @@ async def get_api() -> Union[str, None]:
         get_verification_link_from_mailbox)
     controller.action("Auto-check terms agreement")(check_terms_checkbox)
 
-    # Step 2: Run browser automation WITH proxy
-    print("🌐 Starting browser automation with ScraperAPI proxy...")
+    # Step 2: Try browser automation with proxy first, then without if it fails
+    signup_task = (
+        f"You are creating a new account on Subscan. Follow these steps:\n"
+        f"1. Open https://pro.subscan.io/signup/email\n"
+        f"2. Complete the Sign-Up:\n"
+        f"   Under 'Email' enter: {temp_email}\n"
+        f"   Under 'Password' enter: {password}\n"
+        f"   Under 'Confirm Password' enter: {password}\n"
+        f"3. Execute the 'Auto-check terms agreement' action (this will automatically check the terms box).\n"
+        f"4. If the auto-check failed, manually click the image with 'icon_unchecked' in its source.\n"
+        f"5. Wait 2 seconds.\n"
+        f"6. Then click the 'Sign Up' button to submit the form.\n"
+        f"7. Click on the 'Products' section in the top menu.\n"
+        f"8. Under 'Products', click on 'API Service'.\n"
+        f"9. If you see a verification prompt or message, look for a 'Resend Email' button and click it. Then wait 10 seconds."
+        f"(DO NOT wait 2 minutes even if the webpage suggests it.\n"
+        f"10. Execute the 'Fetch verification link from mailbox' action. Then wait 10 seconds.\n"
+        f"11. Open the link you fetched\n"
+        f"12. Click on the 'Products' section in the top menu.\n"
+        f"13. Under 'Products', click on 'API Service'.\n"
+        f"14. Click on 'API Key'.\n"
+        f"15. Enter 'Sinai' as the app name.\n"
+        f"16. Click 'Create New API Key'.\n"
+        f"17. Click the small button to the left of the copy API token one to reveal the API token (so it will be without *************). "
+        f"The icon of this button is a closed eye icon (that means that the API Key Token is hidden).\n"
+        f"18. Only after the last stage, click the small copy icon to copy the API key.\n"
+        f"19. If the API Key you copied has asterisks in it - return to step 17. If not - continue to the next step.\n"
+        f"20. Return only the API key as JSON:\n"
+        f'{{"api_key": "<your_key_here>"}}'
+    )
 
-    with scraperapi_proxy():
-        try:
-            # Task definition
-            signup_task = (
-                f"You are creating a new account on Subscan. Follow these steps:\n"
-                f"1. Open https://pro.subscan.io/signup/email\n"
-                f"2. Complete the Sign-Up:\n"
-                f"   Under 'Email' enter: {temp_email}\n"
-                f"   Under 'Password' enter: {password}\n"
-                f"   Under 'Confirm Password' enter: {password}\n"
-                f"3. Execute the 'Auto-check terms agreement' action (this will automatically check the terms box).\n"
-                f"4. If the auto-check failed, manually click the image with 'icon_unchecked' in its source.\n"
-                f"5. Wait 2 seconds.\n"
-                f"6. Then click the 'Sign Up' button to submit the form.\n"
-                f"7. Click on the 'Products' section in the top menu.\n"
-                f"8. Under 'Products', click on 'API Service'.\n"
-                f"9. If you see a verification prompt or message, look for a 'Resend Email' button and click it. Then wait 10 seconds."
-                f"(DO NOT wait 2 minutes even if the webpage suggests it.\n"
-                f"10. Execute the 'Fetch verification link from mailbox' action. Then wait 10 seconds.\n"
-                f"11. Open the link you fetched\n"
-                f"12. Click on the 'Products' section in the top menu.\n"
-                f"13. Under 'Products', click on 'API Service'.\n"
-                f"14. Click on 'API Key'.\n"
-                f"15. Enter 'Sinai' as the app name.\n"
-                f"16. Click 'Create New API Key'.\n"
-                f"17. Click the small button to the left of the copy API token one to reveal the API token (so it will be without *************). "
-                f"The icon of this button is a closed eye icon (that means that the API Key Token is hidden).\n"
-                f"18. Only after the last stage, click the small copy icon to copy the API key.\n"
-                f"19. If the API Key you copied has asterisks in it - return to step 17. If not - continue to the next step.\n"
-                f"20. Return only the API key as JSON:\n"
-                f'{{"api_key": "<your_key_here>"}}'
-            )
-
-            # Create agent and store reference
+    # Try with proxy first
+    print("🌐 Attempting browser automation with ScraperAPI proxy...")
+    try:
+        with scraperapi_proxy():
             current_agent = Agent(
                 task=signup_task, llm=llm, controller=controller)
             result = await current_agent.run()
-
             data = result.final_result()
+
+            if data:
+                try:
+                    parsed = APIKey.model_validate_json(data)
+                    return parsed.api_key
+                except Exception as e:
+                    print(f"⚠️ Failed to parse API key with proxy: {e}")
+                    print(f"Raw result: {data}")
+
+    except Exception as e:
+        print(f"❌ Proxy attempt failed: {e}")
+
+    finally:
+        current_agent = None
+        cleanup_chrome_profile()
+
+    # If proxy failed, try without proxy as fallback
+    print("🔄 Attempting browser automation WITHOUT proxy as fallback...")
+    try:
+        current_agent = Agent(task=signup_task, llm=llm, controller=controller)
+        result = await current_agent.run()
+        data = result.final_result()
+
+        if data:
             try:
                 parsed = APIKey.model_validate_json(data)
                 return parsed.api_key
             except Exception as e:
-                print(f"⚠️ Failed to parse API key: {e}")
+                print(f"⚠️ Failed to parse API key without proxy: {e}")
                 print(f"Raw result: {data}")
-                return None
 
-        finally:
-            # Clean shutdown of the browser/session + profile unlock
-            current_agent = None  # Clear the reference
-            cleanup_chrome_profile()
+    except Exception as e:
+        print(f"❌ Fallback attempt failed: {e}")
+
+    finally:
+        current_agent = None
+        cleanup_chrome_profile()
+
+    return None
 
 # ---------- CSV writer ----------
 
