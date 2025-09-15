@@ -40,7 +40,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements1.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements2.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
@@ -73,10 +73,6 @@ jobs:
       - name: Run script (recorded Xvfb session)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          IMAP_HOST: imap.gmail.com
-          IMAP_PORT: 993
-          IMAP_USER: ${{ secrets.IMAP_USER }}
-          IMAP_PASS: ${{ secrets.IMAP_PASS }}
           PYTHONUNBUFFERED: "1"
         run: |
           set -euo pipefail
@@ -93,7 +89,7 @@ jobs:
             run.mp4 >/dev/null 2>&1 &
           REC_PID=$!
           set +e
-          python main_seitrace.py 2>&1 | tee run.log
+          python main_sub_scan.py 2>&1 | tee run.log
           STATUS=${PIPESTATUS[0]}
           set -e
           kill -INT "$REC_PID" || true
@@ -155,7 +151,7 @@ jobs:
         id: upload_video
         uses: actions/upload-artifact@v4
         with:
-          name: seitrace_run_video_${{ github.run_id }}
+          name: sub_scan_run_video_${{ github.run_id }}
           path: run.mp4
           if-no-files-found: warn
           retention-days: 7
