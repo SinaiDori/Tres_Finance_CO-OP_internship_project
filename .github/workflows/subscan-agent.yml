@@ -251,7 +251,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Build an auth URL for libraries that honor env proxy vars (e.g., requests)
+          # Build an auth URL so libraries that honor env proxy vars (e.g., requests) use the proxy automatically
           PROXY_AUTH_URL="http://${PROXY_USERNAME}:${PROXY_PASSWORD}@${PROXY_SERVER#http://}"
           export HTTP_PROXY="$PROXY_AUTH_URL"
           export HTTPS_PROXY="$PROXY_AUTH_URL"
@@ -264,17 +264,6 @@ jobs:
           fluxbox >/dev/null 2>&1 &
           WM_PID=$!
           sleep 1
-
-          # Optional: verify egress through ScraperAPI (non-fatal)
-          python - <<'PY'
-          import os, requests, sys
-          proxy=os.environ.get("HTTP_PROXY")
-          try:
-              r=requests.get("https://api.ipify.org?format=json", timeout=20)
-              print("Proxy egress:", r.text)
-          except Exception as e:
-              print("Egress check failed (continuing):", e, file=sys.stderr)
-          PY
 
           # Start recording
           ffmpeg -y -nostdin -loglevel warning \
