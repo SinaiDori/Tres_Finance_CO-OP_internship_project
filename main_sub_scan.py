@@ -7,7 +7,8 @@ from typing import Union
 
 from dotenv import load_dotenv
 from pydantic import BaseModel
-from browser_use import Agent, Controller, BrowserSession, ProxySettings
+from browser_use import Agent, Controller, Browser
+from browser_use.browser import ProxySettings
 from browser_use.agent.views import ActionResult
 from langchain_openai import ChatOpenAI
 from temp_email_sub_scan import create_account, wait_for_email_with_link
@@ -27,13 +28,22 @@ controller = Controller(output_model=APIKey)
 llm = ChatOpenAI(model="gpt-4o")
 
 # http://proxy-server.scraperapi.com:8001
-server = os.getenv("PROXY_SERVER")
-user = os.getenv("PROXY_USERNAME", "scraperapi")      # includes session_number
-pwd = os.getenv("PROXY_PASSWORD")                    # your API key
+# ScraperAPI proxy comes from the GitHub Actions env
+# e.g. http://proxy-server.scraperapi.com:8001
+PROXY_SERVER = os.getenv("PROXY_SERVER")
+# we set session_number in the workflow
+PROXY_USER = os.getenv("PROXY_USERNAME", "scraperapi")
+PROXY_PASS = os.getenv("PROXY_PASSWORD")                    # your API key
 
-browser_session = BrowserSession(
-    proxy=ProxySettings(server=server, username=user, password=pwd)
-) if (server and pwd) else None
+# Create the browser (with or without proxy)
+if PROXY_SERVER and PROXY_PASS:
+    browser = Browser(proxy=ProxySettings(
+        server=PROXY_SERVER,
+        username=PROXY_USER,
+        password=PROXY_PASS,
+    ))
+else:
+    browser = Browser()
 
 # ---------- Global variable to store agent reference ----------
 current_agent = None
@@ -204,7 +214,7 @@ async def get_api() -> Union[str, None]:
 
         # Create agent and store reference
         current_agent = Agent(task=signup_task, llm=llm,
-                              controller=controller, browser_session=browser_session)
+                              controller=controller, browser=browser)
         result = await current_agent.run()
 
         data = result.final_result()
