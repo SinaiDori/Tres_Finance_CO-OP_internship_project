@@ -25,10 +25,17 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install system deps (Xvfb + ffmpeg + WM)
+      # Install only what we need now (no recorder)
+      - name: Install system deps (Xvfb only)
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb ffmpeg fluxbox
+          sudo apt-get install -y xvfb
+
+      # --- VIDEO: install deps for recording (commented) ---
+      # - name: Install system deps (Xvfb + ffmpeg + WM)
+      #   run: |
+      #     sudo apt-get update
+      #     sudo apt-get install -y xvfb ffmpeg fluxbox
 
       # Cache pip wheels
       - name: Cache pip
@@ -54,48 +61,50 @@ jobs:
           pip install -r requirements1.txt
           python -m playwright install --with-deps chromium
 
-      - name: Run script (recorded Xvfb session)
+      # Simple headful run (no recording)
+      - name: Run script (headful via Xvfb)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # Gmail IMAP for email capture (rotate between gmail/googlemail with dotted local)
           IMAP_HOST: imap.gmail.com
           IMAP_PORT: 993
           IMAP_USER: ${{ secrets.IMAP_USER }}
           IMAP_PASS: ${{ secrets.IMAP_PASS }}
           PYTHONUNBUFFERED: "1"
         run: |
-          set -euo pipefail
-
-          # Start ONE X server on :99 (match ffmpeg size)
-          export DISPLAY=:99
-          Xvfb $DISPLAY -screen 0 1650x800x24 -ac +extension RANDR &
-          XVFB_PID=$!
-          sleep 2
-
-          # Lightweight window manager so Chromium can map/focus windows
-          fluxbox >/dev/null 2>&1 &
-          WM_PID=$!
-          sleep 1
-
-          # Start recording THIS display
-          ffmpeg -y -nostdin -loglevel warning \
-            -f x11grab -framerate 20 -video_size 1650x800 -i $DISPLAY \
-            -c:v libx264 -preset veryfast -pix_fmt yuv420p -movflags +faststart \
-            run.mp4 >/dev/null 2>&1 &
-          REC_PID=$!
-
-          # IMPORTANT: run your script DIRECTLY (NO xvfb-run here)
-          set +e
-          python main_seitrace.py 2>&1 | tee run.log
-          STATUS=${PIPESTATUS[0]}
           set -e
+          xvfb-run -a python main_seitrace.py 2>&1 | tee run.log
 
-          # Stop recorder and X cleanly
-          kill -INT "$REC_PID" || true
-          wait "$REC_PID" || true
-          kill "$WM_PID" "$XVFB_PID" || true
-
-          exit $STATUS
+      # --- VIDEO: recorded session (commented) ---
+      # - name: Run script (recorded Xvfb session)
+      #   env:
+      #     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      #     IMAP_HOST: imap.gmail.com
+      #     IMAP_PORT: 993
+      #     IMAP_USER: ${{ secrets.IMAP_USER }}
+      #     IMAP_PASS: ${{ secrets.IMAP_PASS }}
+      #     PYTHONUNBUFFERED: "1"
+      #   run: |
+      #     set -euo pipefail
+      #     export DISPLAY=:99
+      #     Xvfb $DISPLAY -screen 0 1650x800x24 -ac +extension RANDR &
+      #     XVFB_PID=$!
+      #     sleep 2
+      #     fluxbox >/dev/null 2>&1 &
+      #     WM_PID=$!
+      #     sleep 1
+      #     ffmpeg -y -nostdin -loglevel warning \
+      #       -f x11grab -framerate 20 -video_size 1650x800 -i $DISPLAY \
+      #       -c:v libx264 -preset veryfast -pix_fmt yuv420p -movflags +faststart \
+      #       run.mp4 >/dev/null 2>&1 &
+      #     REC_PID=$!
+      #     set +e
+      #     python main_seitrace.py 2>&1 | tee run.log
+      #     STATUS=${PIPESTATUS[0]}
+      #     set -e
+      #     kill -INT "$REC_PID" || true
+      #     wait "$REC_PID" || true
+      #     kill "$WM_PID" "$XVFB_PID" || true
+      #     exit $STATUS
 
       - name: Slack message (all keys)
         if: ${{ always() }}
@@ -121,7 +130,6 @@ jobs:
           PY
           )
           fi
-
           curl -sS -X POST https://slack.com/api/chat.postMessage \
             -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
             -H "Content-type: application/json; charset=utf-8" \
@@ -145,18 +153,19 @@ jobs:
           path: run.log
           if-no-files-found: ignore
 
-      - name: Upload session video
-        if: ${{ always() }}
-        id: upload_video
-        uses: actions/upload-artifact@v4
-        with:
-          name: seitrace_run_video_${{ github.run_id }}
-          path: run.mp4
-          if-no-files-found: warn
-          retention-days: 7
-
-      - name: Add video link to summary
-        if: ${{ always() }}
-        run: |
-          echo "## Run video" >> $GITHUB_STEP_SUMMARY
-          echo "[Watch/download on GitHub](${{ steps.upload_video.outputs.artifact-url }})" >> $GITHUB_STEP_SUMMARY
+      # --- VIDEO: upload steps (commented) ---
+      # - name: Upload session video
+      #   if: ${{ always() }}
+      #   id: upload_video
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: seitrace_run_video_${{ github.run_id }}
+      #     path: run.mp4
+      #     if-no-files-found: warn
+      #     retention-days: 7
+      #
+      # - name: Add video link to summary
+      #   if: ${{ always() }}
+      #   run: |
+      #     echo "## Run video" >> $GITHUB_STEP_SUMMARY
+      #     echo "[Watch/download on GitHub](${{ steps.upload_video.outputs.artifact-url }})" >> $GITHUB_STEP_SUMMARY
