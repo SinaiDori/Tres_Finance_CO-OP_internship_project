@@ -7,13 +7,7 @@ from typing import Union
 
 from dotenv import load_dotenv
 from pydantic import BaseModel
-from browser_use import Agent, Controller
-try:
-    # Newer versions export these at top level
-    from browser_use import BrowserSession, ProxySettings  # type: ignore
-except Exception:
-    # 0.1.45 path
-    from browser_use.browser import BrowserSession, ProxySettings  # type: ignore
+from browser_use import Agent, Controller, BrowserSession, ProxySettings
 from browser_use.agent.views import ActionResult
 from langchain_openai import ChatOpenAI
 from temp_email_sub_scan import create_account, wait_for_email_with_link
