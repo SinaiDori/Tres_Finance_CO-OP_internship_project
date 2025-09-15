@@ -1,198 +1,6 @@
-# import asyncio
-# import csv
-# import subprocess
-# from pathlib import Path
-# from typing import Union
-
-# from dotenv import load_dotenv
-# from pydantic import BaseModel
-# # from browser_use import Agent, BrowserProfile, BrowserSession, Controller
-# from browser_use import Agent, Controller
-# from browser_use.agent.views import ActionResult
-# from langchain_openai import ChatOpenAI
-# from temp_email_sub_scan import create_account, wait_for_email_with_link
-
-# # Use browser-use version 0.2.5 (separate from etherscan)
-# load_dotenv()
-
-# # ---------- Output model ----------
-
-
-# class APIKey(BaseModel):
-#     api_key: str
-
-
-# # ---------- LLM & controller (reuse across runs) ----------
-# controller = Controller(output_model=APIKey)
-# llm = ChatOpenAI(model="gpt-4o")
-
-# # ---------- Timeouts ----------
-# TIMEOUT_SECONDS = 1000  # keep as you set; adjust if needed
-
-# # ---------- Cleanup helpers ----------
-# PROFILE_DIR = Path.home() / ".config" / "browseruse" / "profiles" / "default"
-
-
-# def _pkill(pattern: str) -> None:
-#     """Best-effort kill by pattern (Linux/GitHub Actions friendly)."""
-#     try:
-#         subprocess.run(["pkill", "-f", pattern], check=False)
-#     except FileNotFoundError:
-#         pass
-#     except Exception:
-#         pass
-
-
-# def cleanup_chrome_profile() -> None:
-#     """Kill lingering Chromium/Chrome and remove profile lock files."""
-#     for pat in (
-#         "chrome-linux/chrome",
-#         "Chromium",
-#         "chrome --type",
-#         "playwright",
-#     ):
-#         _pkill(pat)
-#     try:
-#         if PROFILE_DIR.exists():
-#             for p in PROFILE_DIR.glob("Singleton*"):
-#                 try:
-#                     p.unlink()
-#                 except Exception:
-#                     pass
-#     except Exception:
-#         pass
-
-# # ---------- Core run ----------
-
-
-# async def get_api() -> Union[str, None]:
-#     temp_email, token = create_account()
-#     print(f"📧 Temporary email: {temp_email}")
-#     password = "StrongPass123!"
-
-#     def get_verification_link_from_mailbox():
-#         link = wait_for_email_with_link(token)
-#         if link:
-#             return ActionResult(
-#                 extracted_content=f"VERIFICATION_LINK: {link}",
-#                 description=f"✅ Successfully fetched verification link: {link}"
-#             )
-#         else:
-#             return ActionResult(
-#                 extracted_content="NO_LINK_FOUND",
-#                 description="❌ Failed to fetch verification link from mailbox"
-#             )
-
-#     controller.action("Fetch verification link from mailbox")(
-#         get_verification_link_from_mailbox)
-
-#     async def check_terms_checkbox():
-#         # Execute JavaScript in the current browser page
-#         result = await page.evaluate("""
-#             const checkbox = document.querySelector('img[src*="icon_unchecked"]');
-#             if (checkbox) {
-#                 checkbox.click();
-#                 return 'Checkbox clicked';
-#             }
-#             return 'Checkbox not found';
-#         """)
-
-#         return ActionResult(
-#             extracted_content="CHECKBOX_CLICKED",
-#             description=f"Auto-clicked terms checkbox: {result}"
-#         )
-
-#     controller.action("Auto-check terms agreement")(check_terms_checkbox)
-#     try:
-#         # Step 1: Sign up on Subscan
-#         signup_task = (
-#             f"You are creating a new account on Subscan. Follow these steps:\n"
-#             f"1. Open https://pro.subscan.io/signup/email\n"
-#             f"2. Complete the Sign-Up:\n"
-#             f"   Under 'Email' enter: {temp_email}\n"
-#             f"   Under 'Password' enter: {password}\n"
-#             f"   Under 'Confirm Password' enter: {password}\n"
-#             f"3. Execute the 'Auto-check terms agreement' action (this will automatically check the terms box).\n"
-#             f"4. Wait 2 seconds.\n"
-#             f"5. Then click the 'Sign Up' button to submit the form.\n"
-#             f"6. Click on the 'Products' section in the top menu.\n"
-#             f"7. Under 'Products', click on 'API Service'.\n"
-#             f"8. If you see a verification prompt or message, look for a 'Resend Email' button and click it. Then wait 10 seconds."
-#             f"(DO NOT wait 2 minutes even if the webpage suggests it.\n"
-#             f"9. Execute the 'Fetch verification link from mailbox' action. Then wait 10 seconds.\n"
-#             f"10. Open the link you fetched\n"
-#             f"11. Click on the 'Products' section in the top menu.\n"
-#             f"12. Under 'Products', click on 'API Service'.\n"
-#             f"13. Click on 'API Key'.\n"
-#             f"14. Enter 'Sinai' as the app name.\n"
-#             f"15. Click 'Create New API Key'.\n"
-#             f"16. Click the small button to the left of the copy API token one to reveal the API token (so it will be without *************). "
-#             f"The icon of this button is a closed eye icon (that means that the API Key Token is hidden).\n"
-#             f"17. Only after the last stage, click the small copy icon to copy the API key.\n"
-#             f"18. If the API Key you copied has asterisks in it - return to step 16. If not - continue to the next step.\n"
-#             f"19. Return only the API key as JSON:\n"
-#             f'{{"api_key": "<your_key_here>"}}'
-
-#         )
-#         # await Agent(task=signup_task, llm=llm, controller=controller, browser_session=browser_session).run()
-#         result = await Agent(task=signup_task, llm=llm, controller=controller).run()
-#         # print("✅ Signup submitted.")
-
-#         data = result.final_result()
-#         try:
-#             parsed = APIKey.model_validate_json(data)
-#             return parsed.api_key
-#         except Exception as e:
-#             print(f"⚠️ Failed to parse API key: {e}")
-#             print(f"Raw result: {data}")
-#             return None
-
-#     finally:
-#         # # Clean shutdown of the browser/session + profile unlock
-#         cleanup_chrome_profile()
-
-# # ---------- CSV writer ----------
-
-
-# def write_csv(api_key: str, filename="sub_scan_api_keys.csv") -> None:
-#     with open(filename, "a", newline="") as csvfile:
-#         writer = csv.writer(csvfile)
-#         writer.writerow([api_key])
-#     print(f"✅ API key saved to '{filename}'.")
-
-# # ---------- Loop ----------
-
-
-# async def run_multiple_keys(n: int = 1):
-#     for i in range(n):
-#         print(f"\n🔁 Starting run {i + 1} of {n}")
-#         try:
-#             key = await asyncio.wait_for(get_api(), timeout=TIMEOUT_SECONDS)
-#             if key:
-#                 write_csv(key)
-#                 print(f"✅ Successfully generated API key: {key[:10]}...")
-#             else:
-#                 print("⚠️ No key returned.")
-#         except asyncio.TimeoutError:
-#             mins = TIMEOUT_SECONDS // 60
-#             print(
-#                 f"⏰ Timeout: API generation run {i + 1} exceeded {mins} minutes.")
-#         except Exception as e:
-#             print(f"❌ Error in run {i + 1}: {e}")
-#         finally:
-#             # Safety cleanup after each iteration + a short breather
-#             cleanup_chrome_profile()
-#             await asyncio.sleep(1.0)
-
-# if __name__ == "__main__":
-#     try:
-#         asyncio.run(run_multiple_keys(1))
-#     except KeyboardInterrupt:
-#         print("\n🛑 Process interrupted by user.")
-
-
 import asyncio
 import csv
+import os
 import subprocess
 from pathlib import Path
 from typing import Union
@@ -200,7 +8,7 @@ from typing import Union
 from dotenv import load_dotenv
 from pydantic import BaseModel
 # from browser_use import Agent, BrowserProfile, BrowserSession, Controller
-from browser_use import Agent, Controller
+from browser_use import Agent, Controller, BrowserSession, ProxySettings
 from browser_use.agent.views import ActionResult
 from langchain_openai import ChatOpenAI
 from temp_email_sub_scan import create_account, wait_for_email_with_link
@@ -218,6 +26,15 @@ class APIKey(BaseModel):
 # ---------- LLM & controller (reuse across runs) ----------
 controller = Controller(output_model=APIKey)
 llm = ChatOpenAI(model="gpt-4o")
+
+# http://proxy-server.scraperapi.com:8001
+server = os.getenv("PROXY_SERVER")
+user = os.getenv("PROXY_USERNAME", "scraperapi")      # includes session_number
+pwd = os.getenv("PROXY_PASSWORD")                    # your API key
+
+browser_session = BrowserSession(
+    proxy=ProxySettings(server=server, username=user, password=pwd)
+) if (server and pwd) else None
 
 # ---------- Global variable to store agent reference ----------
 current_agent = None
@@ -387,7 +204,8 @@ async def get_api() -> Union[str, None]:
         )
 
         # Create agent and store reference
-        current_agent = Agent(task=signup_task, llm=llm, controller=controller)
+        current_agent = Agent(task=signup_task, llm=llm,
+                              controller=controller, browser_session=browser_session)
         result = await current_agent.run()
 
         data = result.final_result()
