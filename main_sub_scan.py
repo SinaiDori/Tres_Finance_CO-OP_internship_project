@@ -8,7 +8,7 @@ from typing import Union
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from browser_use import Agent, Controller, Browser
-from browser_use.browser import ProxySettings
+from browser_use.browser.browser import ProxySettings
 from browser_use.agent.views import ActionResult
 from langchain_openai import ChatOpenAI
 from temp_email_sub_scan import create_account, wait_for_email_with_link
