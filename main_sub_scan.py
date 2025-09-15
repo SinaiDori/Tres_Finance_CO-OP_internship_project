@@ -407,11 +407,11 @@ def get_working_proxy():
 
 @contextlib.contextmanager
 def scraperapi_proxy():
-    """Context manager to enable ScraperAPI proxy only when needed"""
+    """Context manager to enable ScraperAPI proxy specifically for Subscan"""
     working_proxy = get_working_proxy()
 
     if not working_proxy:
-        print("⚠️ No working proxy found - running without proxy")
+        print("⚠️ No working Subscan proxy found - running without proxy")
         yield
         return
 
@@ -425,25 +425,18 @@ def scraperapi_proxy():
         os.environ['HTTP_PROXY'] = working_proxy
         os.environ['HTTPS_PROXY'] = working_proxy
 
-        # Comprehensive bypass list
+        # Minimal bypass list for Subscan-specific proxy
         no_proxy_domains = [
             'localhost',
             '127.0.0.1',
-            '*.local',
-            'posthog.com',
-            '*.posthog.com',
-            'eu.i.posthog.com',
-            'us.i.posthog.com',
             'api.mail.tm',
             'powerscrews.com',
-            '*.powerscrews.com',
             'openai.com',
             '*.openai.com'
         ]
         os.environ['NO_PROXY'] = ','.join(no_proxy_domains)
 
-        print(f"🌐 Proxy enabled successfully")
-        print(f"🚫 Bypassing proxy for: {len(no_proxy_domains)} domains")
+        print(f"🌐 Enabled Subscan-specific proxy")
         yield
 
     finally:
