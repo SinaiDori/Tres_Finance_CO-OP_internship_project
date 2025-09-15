@@ -277,56 +277,28 @@ class APIKey(BaseModel):
 
 
 # ---------- Proxy configuration ----------
-def get_proxy_config():
-    """Configure ScraperAPI proxy settings"""
+def setup_proxy_environment():
+    """Configure ScraperAPI proxy as environment variables"""
     scraperapi_key = os.getenv('SCRAPERAPI_KEY')
     if not scraperapi_key:
         print("⚠️ No SCRAPERAPI_KEY found in environment variables")
-        return None
+        return False
 
-    # ScraperAPI proxy configuration
-    proxy_config = {
-        'server': f'http://scraperapi:{scraperapi_key}@proxy-server.scraperapi.com:8001',
-        # Alternative format if the above doesn't work:
-        # 'server': f'http://scraperapi.country_code=US:{scraperapi_key}@proxy-server.scraperapi.com:8001',
-    }
+    # ScraperAPI proxy configuration with premium features for protected domains
+    proxy_url = f"http://scraperapi.premium=true.country_code=US:{scraperapi_key}@proxy-server.scraperapi.com:8001"
 
-    print(f"🌐 Using ScraperAPI proxy: proxy-server.scraperapi.com:8001")
-    return proxy_config
+    # Set proxy environment variables that Playwright will pick up
+    os.environ['HTTP_PROXY'] = proxy_url
+    os.environ['HTTPS_PROXY'] = proxy_url
+
+    print(f"🌐 Using ScraperAPI premium proxy: proxy-server.scraperapi.com:8001")
+    return True
 
 
 # ---------- LLM & controller (reuse across runs) ----------
-def create_controller_with_proxy():
-    """Create controller with proxy configuration"""
-    proxy_config = get_proxy_config()
-
-    if proxy_config:
-        # Configure browser context with proxy
-        browser_config = {
-            'headless': True,  # Keep headless for GitHub Actions
-            'proxy': proxy_config,
-            'args': [
-                '--no-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-blink-features=AutomationControlled',
-                '--disable-web-security',
-                '--disable-features=VizDisplayCompositor',
-                '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            ]
-        }
-
-        controller = Controller(
-            output_model=APIKey,
-            browser_config=browser_config
-        )
-    else:
-        # Fallback to standard configuration
-        controller = Controller(output_model=APIKey)
-
-    return controller
-
-
-controller = create_controller_with_proxy()
+# Setup proxy environment before creating controller
+proxy_configured = setup_proxy_environment()
+controller = Controller(output_model=APIKey)
 llm = ChatOpenAI(model="gpt-4o")
 
 # ---------- Global variable to store agent reference ----------
