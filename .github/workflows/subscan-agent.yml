@@ -1,167 +1,3 @@
-# name: subscan-agent
-
-# on:
-#   workflow_dispatch: {}
-#   # schedule:
-#   #   # Apr–Oct (IDT, UTC+3): 08:00 local = 05:00 UTC
-#   #   - cron: "0 5 * 4-10 *"
-#   #   # Jan–Mar & Nov–Dec (IST, UTC+2): 08:00 local = 06:00 UTC
-#   #   - cron: "0 6 * 1-3,11-12 *"
-
-# jobs:
-#   run:
-#     runs-on: ubuntu-latest
-#     timeout-minutes: 60
-#     concurrency:
-#       group: subscan-agent
-#       cancel-in-progress: false
-
-#     steps:
-#       - name: Checkout repo
-#         uses: actions/checkout@v4
-
-#       - name: Setup Python
-#         uses: actions/setup-python@v5
-#         with:
-#           python-version: '3.11'
-
-#       - name: Install system deps (Xvfb for headful Chromium)
-#         run: |
-#           sudo apt-get update
-#           sudo apt-get install -y xvfb
-
-#       - name: Install system deps (Xvfb + ffmpeg + WM)
-#         run: |
-#           sudo apt-get update
-#           sudo apt-get install -y xvfb ffmpeg fluxbox
-        
-#       # Cache pip wheels
-#       - name: Cache pip
-#         uses: actions/cache@v4
-#         with:
-#           path: ~/.cache/pip
-#           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements2.txt') }}
-#           restore-keys: |
-#             ${{ runner.os }}-pip-
-
-#       # Cache Playwright browsers
-#       - name: Cache Playwright
-#         uses: actions/cache@v4
-#         with:
-#           path: ~/.cache/ms-playwright
-#           key: ${{ runner.os }}-playwright-${{ hashFiles('**/requirements2.txt') }}
-#           restore-keys: |
-#             ${{ runner.os }}-playwright-
-
-#       - name: Install Python deps
-#         run: |
-#           python -m pip install -U pip
-#           pip install -r requirements2.txt
-#           python -m playwright install --with-deps chromium
-
-#       # If your code is headless, replace this with: `python your_script.py`
-#       - name: Run script (headful via Xvfb)
-#         env:
-#           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-#           # add any other secrets your code needs:
-#           # TEMPMAIL_TOKEN: ${{ secrets.TEMPMAIL_TOKEN }}
-#           PYTHONUNBUFFERED: "1"
-#         run: |
-#           set -e
-#           xvfb-run -a python main_sub_scan.py 2>&1 | tee run.log
-
-#       - name: Run script (recorded Xvfb session)
-#         env:
-#           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-#           PYTHONUNBUFFERED: "1"
-#         run: |
-#           set -euo pipefail
-#           export DISPLAY=:99
-#           Xvfb $DISPLAY -screen 0 1650x800x24 -ac +extension RANDR &
-#           XVFB_PID=$!
-#           sleep 2
-#           fluxbox >/dev/null 2>&1 &
-#           WM_PID=$!
-#           sleep 1
-#           ffmpeg -y -nostdin -loglevel warning \
-#             -f x11grab -framerate 20 -video_size 1650x800 -i $DISPLAY \
-#             -c:v libx264 -preset veryfast -pix_fmt yuv420p -movflags +faststart \
-#             run.mp4 >/dev/null 2>&1 &
-#           REC_PID=$!
-#           set +e
-#           python main_sub_scan.py 2>&1 | tee run.log
-#           STATUS=${PIPESTATUS[0]}
-#           set -e
-#           kill -INT "$REC_PID" || true
-#           wait "$REC_PID" || true
-#           kill "$WM_PID" "$XVFB_PID" || true
-#           exit $STATUS
-
-#       - name: Slack message (all keys)
-#         if: ${{ always() }}
-#         env:
-#           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-#           SLACK_SUB_SCAN_CHANNEL_ID: ${{ secrets.SLACK_SUB_SCAN_CHANNEL_ID }}
-#         run: |
-#           set -e
-#           if [ -s sub_scan_api_keys.csv ]; then
-#             JSON_PAYLOAD=$(python - <<'PY'
-#           import os, json
-#           ch = os.environ["SLACK_SUB_SCAN_CHANNEL_ID"]
-#           with open("sub_scan_api_keys.csv","r") as f:
-#               keys = [ln.strip() for ln in f if ln.strip()]
-#           text = "\n".join(keys) if keys else "No API keys produced."
-#           print(json.dumps({"channel": ch, "text": text}))
-#           PY
-#           )
-#               else
-#                 JSON_PAYLOAD=$(python - <<'PY'
-#           import os, json
-#           print(json.dumps({"channel": os.environ["SLACK_SUB_SCAN_CHANNEL_ID"], "text": "No API keys produced."}))
-#           PY
-#           )
-#               fi
-          
-#               curl -sS -X POST https://slack.com/api/chat.postMessage \
-#                 -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
-#                 -H "Content-type: application/json; charset=utf-8" \
-#                 --data "$JSON_PAYLOAD"
-
-        
-#       # Optional: keep a backup artifact (auto-expires)
-#       - name: Upload artifact (CSV)
-#         if: ${{ always() }}
-#         uses: actions/upload-artifact@v4
-#         with:
-#           name: subscan_api_keys_${{ github.run_id }}
-#           path: sub_scan_api_keys.csv
-#           if-no-files-found: ignore
-#           retention-days: 7
-
-#       - name: Upload full logs
-#         if: ${{ always() }}
-#         uses: actions/upload-artifact@v4
-#         with:
-#           name: run-log
-#           path: run.log
-#           if-no-files-found: ignore
-
-#       - name: Upload session video
-#         if: ${{ always() }}
-#         id: upload_video
-#         uses: actions/upload-artifact@v4
-#         with:
-#           name: sub_scan_run_video_${{ github.run_id }}
-#           path: run.mp4
-#           if-no-files-found: warn
-#           retention-days: 7
-      
-#       - name: Add video link to summary
-#         if: ${{ always() }}
-#         run: |
-#           echo "## Run video" >> $GITHUB_STEP_SUMMARY
-#           echo "[Watch/download on GitHub](${{ steps.upload_video.outputs.artifact-url }})" >> $GITHUB_STEP_SUMMARY
-
 name: subscan-agent
 
 on:
@@ -223,26 +59,20 @@ jobs:
           pip install -r requirements2.txt
           python -m playwright install --with-deps chromium
 
-      # Test proxy connection (optional debug step)
-      - name: Test ScraperAPI connection
+      # If your code is headless, replace this with: `python your_script.py`
+      - name: Run script (headful via Xvfb)
         env:
-          SCRAPERAPI_KEY: ${{ secrets.SCRAPERAPI_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # add any other secrets your code needs:
+          # TEMPMAIL_TOKEN: ${{ secrets.TEMPMAIL_TOKEN }}
+          PYTHONUNBUFFERED: "1"
         run: |
-          if [ -n "$SCRAPERAPI_KEY" ]; then
-            echo "🌐 Testing ScraperAPI connection..."
-            curl -x "scraperapi:$SCRAPERAPI_KEY@proxy-server.scraperapi.com:8001" \
-                 -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
-                 --connect-timeout 30 \
-                 --max-time 60 \
-                 "http://httpbin.org/ip" || echo "⚠️ Proxy test failed, but continuing..."
-          else
-            echo "⚠️ No SCRAPERAPI_KEY found - running without proxy"
-          fi
+          set -e
+          xvfb-run -a python main_sub_scan.py 2>&1 | tee run.log
 
       - name: Run script (recorded Xvfb session)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          SCRAPERAPI_KEY: ${{ secrets.SCRAPERAPI_KEY }}
           PYTHONUNBUFFERED: "1"
         run: |
           set -euo pipefail
