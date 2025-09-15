@@ -14,5 +14,5 @@ playwright>=1.48,<2
 # patchright==1.52.5
 
 # Browser automation orchestrator
-# browser-use==0.1.45
-browser-use==0.5.11
+browser-use==0.1.45
+# browser-use==0.5.11

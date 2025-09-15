@@ -162,7 +162,6 @@
 #           echo "## Run video" >> $GITHUB_STEP_SUMMARY
 #           echo "[Watch/download on GitHub](${{ steps.upload_video.outputs.artifact-url }})" >> $GITHUB_STEP_SUMMARY
 
-
 name: subscan-agent
 
 on:
@@ -181,9 +180,6 @@ jobs:
       group: subscan-agent
       cancel-in-progress: false
 
-    env:
-      PYTHONUNBUFFERED: "1"
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -193,12 +189,16 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: System deps (Xvfb + ffmpeg + WM + fonts)
+      - name: Install system deps (Xvfb for headful Chromium)
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb ffmpeg fluxbox \
-            fonts-noto fonts-liberation fonts-dejavu-core
+          sudo apt-get install -y xvfb
 
+      - name: Install system deps (Xvfb + ffmpeg + WM)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb ffmpeg fluxbox
+        
       # Cache pip wheels
       - name: Cache pip
         uses: actions/cache@v4
@@ -213,76 +213,58 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-msplaywright-${{ hashFiles('**/requirements2.txt') }}
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/requirements2.txt') }}
           restore-keys: |
-            ${{ runner.os }}-msplaywright-
+            ${{ runner.os }}-playwright-
 
-      - name: Install Python deps + Chromium
+      - name: Install Python deps
         run: |
           python -m pip install -U pip
           pip install -r requirements2.txt
           python -m playwright install --with-deps chromium
 
-      # Make Python requests/urllib3 trust ScraperAPI's proxy CA
-      - name: Prepare CA bundle for ScraperAPI (requests/certifi)
+      # Test proxy connection (optional debug step)
+      - name: Test ScraperAPI connection
+        env:
+          SCRAPERAPI_KEY: ${{ secrets.SCRAPERAPI_KEY }}
         run: |
-          set -euo pipefail
-          CA_TMP=/tmp/scraperapi-proxyca.pem
-          curl -fsSL https://api.scraperapi.com/proxyca.pem -o "$CA_TMP"
-          python - <<'PY'
-          import certifi
-          from pathlib import Path
-          src = Path(certifi.where())
-          dst = Path("/tmp/certifi-plus-scraperapi.pem")
-          dst.write_bytes(src.read_bytes() + b"\n" + Path("/tmp/scraperapi-proxyca.pem").read_bytes())
-          print("Wrote:", dst)
-          PY
-                    echo "REQUESTS_CA_BUNDLE=/tmp/certifi-plus-scraperapi.pem" >> $GITHUB_ENV
-                    echo "CURL_CA_BUNDLE=/tmp/certifi-plus-scraperapi.pem" >> $GITHUB_ENV
+          if [ -n "$SCRAPERAPI_KEY" ]; then
+            echo "🌐 Testing ScraperAPI connection..."
+            curl -x "scraperapi:$SCRAPERAPI_KEY@proxy-server.scraperapi.com:8001" \
+                 -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+                 --connect-timeout 30 \
+                 --max-time 60 \
+                 "http://httpbin.org/ip" || echo "⚠️ Proxy test failed, but continuing..."
+          else
+            echo "⚠️ No SCRAPERAPI_KEY found - running without proxy"
+          fi
 
-      # Single recorded run through ScraperAPI (rotating resi proxy)
-      - name: Run script (recorded via ScraperAPI proxy)
+      - name: Run script (recorded Xvfb session)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # ScraperAPI proxy credentials
-          PROXY_SERVER: http://proxy-server.scraperapi.com:8001
-          PROXY_USERNAME: scraperapi.session_number=${{ github.run_id }}
-          PROXY_PASSWORD: ${{ secrets.SCRAPERAPI_KEY }}
+          SCRAPERAPI_KEY: ${{ secrets.SCRAPERAPI_KEY }}
+          PYTHONUNBUFFERED: "1"
         run: |
           set -euo pipefail
-
-          # Build an auth URL so libraries that honor env proxy vars (e.g., requests) use the proxy automatically
-          PROXY_AUTH_URL="http://${PROXY_USERNAME}:${PROXY_PASSWORD}@${PROXY_SERVER#http://}"
-          export HTTP_PROXY="$PROXY_AUTH_URL"
-          export HTTPS_PROXY="$PROXY_AUTH_URL"
-
-          # Xvfb + WM
           export DISPLAY=:99
-          Xvfb $DISPLAY -screen 0 1650x800x24 -ac +extension RANDR >/tmp/xvfb.log 2>&1 &
+          Xvfb $DISPLAY -screen 0 1650x800x24 -ac +extension RANDR &
           XVFB_PID=$!
           sleep 2
           fluxbox >/dev/null 2>&1 &
           WM_PID=$!
           sleep 1
-
-          # Start recording
           ffmpeg -y -nostdin -loglevel warning \
             -f x11grab -framerate 20 -video_size 1650x800 -i $DISPLAY \
             -c:v libx264 -preset veryfast -pix_fmt yuv420p -movflags +faststart \
             run.mp4 >/dev/null 2>&1 &
           REC_PID=$!
-
-          # Run once and capture logs
           set +e
           python main_sub_scan.py 2>&1 | tee run.log
           STATUS=${PIPESTATUS[0]}
           set -e
-
-          # Cleanup
           kill -INT "$REC_PID" || true
           wait "$REC_PID" || true
           kill "$WM_PID" "$XVFB_PID" || true
-
           exit $STATUS
 
       - name: Slack message (all keys)
@@ -302,28 +284,37 @@ jobs:
           print(json.dumps({"channel": ch, "text": text}))
           PY
           )
-          else
-            JSON_PAYLOAD=$(python - <<'PY'
+              else
+                JSON_PAYLOAD=$(python - <<'PY'
           import os, json
           print(json.dumps({"channel": os.environ["SLACK_SUB_SCAN_CHANNEL_ID"], "text": "No API keys produced."}))
           PY
           )
-          fi
-          curl -sS -X POST https://slack.com/api/chat.postMessage \
-            -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
-            -H "Content-type: application/json; charset=utf-8" \
-            --data "$JSON_PAYLOAD"
+              fi
+          
+              curl -sS -X POST https://slack.com/api/chat.postMessage \
+                -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+                -H "Content-type: application/json; charset=utf-8" \
+                --data "$JSON_PAYLOAD"
 
-      - name: Upload artifacts (logs + CSV)
+        
+      # Optional: keep a backup artifact (auto-expires)
+      - name: Upload artifact (CSV)
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: subscan_run_${{ github.run_id }}
-          path: |
-            run.log
-            sub_scan_api_keys.csv
+          name: subscan_api_keys_${{ github.run_id }}
+          path: sub_scan_api_keys.csv
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Upload full logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-log
+          path: run.log
+          if-no-files-found: ignore
 
       - name: Upload session video
         if: ${{ always() }}
@@ -334,7 +325,7 @@ jobs:
           path: run.mp4
           if-no-files-found: warn
           retention-days: 7
-
+      
       - name: Add video link to summary
         if: ${{ always() }}
         run: |
