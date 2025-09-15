@@ -1,9 +1,10 @@
 FROM python:3.11-slim
 
-# Install system dependencies
+# Install system dependencies including Xvfb for virtual display
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
+    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -19,5 +20,5 @@ RUN playwright install --with-deps chromium
 # Copy application code
 COPY . .
 
-# Run the application
-CMD ["python", "main_sub_scan.py"]
+# Set up virtual display and run the application
+CMD xvfb-run -a python main_sub_scan.py
