@@ -1,108 +1,15 @@
-# import requests
-# import time
-# import re
-# import random
-# import string
-# from bs4 import BeautifulSoup
-# import html.parser as html
+"""
+TEMPORARY EMAIL UTILITY FOR SEITRACE AUTOMATION
+This utility module provides sophisticated temporary email handling specifically for SeiTrace 
+API key generation using IMAP-based email access. It supports two modes: custom catchall 
+domains or Gmail/Googlemail addresses with intelligent dot variations to create unique aliases 
+while bypassing service restrictions. The module implements robust email polling with timestamp-
+based freshness checks, advanced filtering by sender/subject, and regex-based OTP code extraction
+from email content. It handles complex IMAP operations including message parsing, header analysis,
+and multi-part content decoding to reliably extract verification codes during automated account 
+registration processes.
+"""
 
-# BASE_URL = "https://api.mail.tm"
-
-
-# def get_valid_domain():
-#     res = requests.get(f"{BASE_URL}/domains")
-#     res.raise_for_status()
-#     domains = res.json()["hydra:member"]
-#     if not domains:
-#         raise Exception("No domains available from mail.tm")
-#     return domains[0]["domain"]
-
-
-# def generate_random_credentials():
-#     username = ''.join(random.choices(
-#         string.ascii_lowercase + string.digits, k=10))
-#     password = "TempPass123!"
-#     return username, password
-
-
-# def create_account():
-#     username, password = generate_random_credentials()
-#     domain = get_valid_domain()
-#     email = f"{username}@{domain}"
-
-#     res = requests.post(f"{BASE_URL}/accounts",
-#                         json={"address": email, "password": password})
-#     if res.status_code == 201:
-#         token = login(email, password)
-#         return email, token
-#     else:
-#         raise Exception(f"Could not create mail.tm account: {res.text}")
-
-
-# def login(email, password):
-#     res = requests.post(f"{BASE_URL}/token",
-#                         json={"address": email, "password": password})
-#     res.raise_for_status()
-#     return res.json()["token"]
-
-
-# def get_messages(token):
-#     headers = {"Authorization": f"Bearer {token}"}
-#     res = requests.get(f"{BASE_URL}/messages", headers=headers)
-#     res.raise_for_status()
-#     return res.json()["hydra:member"]
-
-
-# def read_message(token, msg_id):
-#     headers = {"Authorization": f"Bearer {token}"}
-#     res = requests.get(f"{BASE_URL}/messages/{msg_id}", headers=headers)
-#     res.raise_for_status()
-#     return res.json()
-
-
-# def wait_for_verification_code(
-#     token,
-#     expected_sender="noreply@seitrace.com",
-#     expected_subject="Seitrace register",
-#     regex_pattern=r"code is (\d{6})",
-#     timeout: int = 20,
-#     interval: int = 5
-# ) -> str:
-#     """Poll inbox and extract a 6-digit verification code from the message body"""
-#     elapsed = 0
-#     while elapsed < timeout:
-#         try:
-#             messages = get_messages(token)
-#             for msg in messages:
-#                 sender = msg.get("from", {}).get("address", "")
-#                 subject = msg.get("subject", "")
-#                 if expected_sender in sender and expected_subject in subject:
-#                     full = read_message(token, msg["id"])
-#                     content = full.get("text", "") or full.get("html", "")
-#                     content = html.unescape(content)
-
-#                     # 🔍 Debug output to see what the email content looks like
-#                     print("📨 RAW EMAIL CONTENT:\n", content)
-#                     print("🔎 Subject:", subject)
-#                     print("🔎 From:", sender)
-
-#                     match = re.search(regex_pattern, content)
-#                     if match:
-#                         code = match.group(1)
-#                         print(f"✅ Found Seitrace verification code: {code}")
-#                         return code
-#                     else:
-#                         print("⚠️ Email matched but no code found in content.")
-#         except Exception as e:
-#             print(f"⚠️ Error while checking mail: {e}")
-
-#         print(
-#             f"📬 Waiting for verification email... {elapsed}/{timeout} seconds elapsed")
-#         time.sleep(interval)
-#         elapsed += interval
-
-#     raise TimeoutError(
-#         "⏱️ Timeout reached. Verification email not received or code not found.")
 
 import os
 import re
@@ -110,7 +17,7 @@ import time
 import uuid
 import imaplib
 import email
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Tuple, Optional, List
 
 # Optional: load .env if python-dotenv is installed
@@ -119,13 +26,6 @@ try:
     load_dotenv()
 except Exception:
     pass
-
-# =============================
-# Public API (kept stable)
-# - create_account() -> (email, token)
-# - wait_for_verification_code(token, expected_sender, expected_subject, regex_pattern, timeout, interval) -> code
-# Back-compat stubs: login(), generate_random_credentials(), get_messages(), read_message()
-# =============================
 
 
 def _env(name: str, default: Optional[str] = None) -> str:

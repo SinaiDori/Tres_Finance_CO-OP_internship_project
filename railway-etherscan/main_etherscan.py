@@ -1,3 +1,15 @@
+"""
+ETHERSCAN API KEY GENERATOR - MAIN AUTOMATION SCRIPT
+This file serves as the primary automation engine for generating Etherscan API keys through 
+automated account creation. It orchestrates the complete workflow: creating temporary email 
+accounts, using an AI-powered browser agent (GPT-4 + browser automation) to navigate the 
+Etherscan signup process, handling email verification via HTTP requests, and automatically 
+extracting API keys. The script manages Chrome browser sessions and implements a multi-step 
+verification process, then can generate multiple API keys in batch runs. Each generated key 
+is saved to a CSV file for later use.
+"""
+
+
 from temp_email_etherscan import create_account, wait_for_email_with_link
 from langchain_openai import ChatOpenAI
 from browser_use import Agent, Controller

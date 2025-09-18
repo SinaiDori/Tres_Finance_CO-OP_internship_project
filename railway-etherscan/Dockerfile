@@ -1,6 +1,13 @@
 # syntax=docker/dockerfile:1
 FROM python:3.11-slim
 
+# CONTAINERIZED BROWSER AUTOMATION ENVIRONMENT
+# This Dockerfile creates a complete headless browser automation environment with visual debugging 
+# capabilities. It installs a full desktop stack (Xvfb, VNC, Fluxbox, noVNC) for remote browser 
+# monitoring, all necessary Chromium dependencies for Playwright automation, and Python runtime 
+# requirements. The container provides both automated execution capabilities and web-based remote 
+# desktop access for troubleshooting browser automation workflows in cloud environments.
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 # System packages:

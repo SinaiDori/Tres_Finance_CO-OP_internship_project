@@ -1,4 +1,13 @@
 #!/bin/bash
+# HEADLESS BROWSER AUTOMATION STARTUP SCRIPT
+# This script orchestrates the complete cloud deployment workflow for browser automation. It sets up 
+# a virtual desktop environment (Xvfb + Fluxbox), configures VNC server access, launches a web-based 
+# VNC viewer (noVNC) for remote monitoring, and executes the Etherscan API key generation script. 
+# After completion, it automatically posts results to Slack and provides options for post-execution 
+# debugging. This enables fully automated, cloud-deployed browser automation with real-time visual 
+# monitoring capabilities through any web browser.
+
+
 set -euo pipefail
 
 # 1) Virtual display

@@ -1,3 +1,15 @@
+"""
+TEMPORARY EMAIL UTILITY FOR SUBSCAN AUTOMATION
+This utility module handles temporary email account creation and verification link extraction 
+specifically for Subscan API key generation. It provides a complete mail.tm integration that 
+creates disposable email accounts, polls for incoming verification emails, and intelligently 
+extracts Subscan verification links from email content using multiple parsing strategies 
+(regex patterns, HTML parsing with BeautifulSoup). The module manages the full email lifecycle 
+from account creation through message retrieval, with robust error handling and timeout 
+mechanisms to ensure reliable email verification during automated account registration processes.
+"""
+
+
 import requests
 import time
 import re

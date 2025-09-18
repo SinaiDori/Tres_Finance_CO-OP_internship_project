@@ -1,18 +1,9 @@
-### This file lists the dependencies required to run the project for !Etherscan!
-# Core runtime dependencies
+### This file lists the dependencies required to run the project for !Sub scan!
 python-dotenv>=1.0,<2
 pydantic>=2.7,<3
 requests>=2.31,<3
 beautifulsoup4>=4.12,<5
-
-# LLM + agent stack
 openai>=1.35,<2
 langchain-openai>=0.2.0,<1
-
-# Headless browser automation (required by browser-use)
 playwright>=1.48,<2
-# patchright==1.52.5
-
-# Browser automation orchestrator
 browser-use==0.1.45
-# browser-use==0.5.11

@@ -1,3 +1,14 @@
+# GITHUB ACTIONS WORKFLOW - SUBSCAN API KEY AUTOMATION
+# This workflow orchestrates cloud-based execution of the Subscan API key generation process.
+# It sets up a complete Ubuntu environment with virtual display capabilities, installs browser
+# automation dependencies, executes the main_sub_scan.py script with video recording for 
+# debugging purposes, and automatically posts results to Slack channels. The workflow includes 
+# comprehensive caching for performance, artifact collection for troubleshooting, and supports
+# both manual triggers and scheduled execution. Video recordings and logs are preserved as 
+# downloadable artifacts for post-execution analysis and debugging of browser automation issues.
+#! Note: Sub scan currently blocks the remote automation so this workflow fails. It works fine locally (that is, without GitHub Actions).
+
+
 name: subscan-agent
 
 on:

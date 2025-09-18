@@ -1,3 +1,12 @@
+# GITHUB ACTIONS WORKFLOW - RAILWAY CLOUD DEPLOYMENT FOR ETHERSCAN AUTOMATION
+# This workflow orchestrates cloud deployment of the Etherscan API key generation process to
+# Railway platform instead of running directly in GitHub Actions. It uses Railway CLI to deploy
+# the containerized automation environment, sets runtime configuration variables, and triggers
+# remote execution with visual monitoring capabilities. This approach provides better resource
+# allocation, persistent VNC access for debugging, and separates the execution environment from
+# the CI/CD pipeline while maintaining scheduled automation and timezone-aware cron jobs.
+# The workflow runs each mornoing at 8:00 local time.
+
 name: run-etherscan-on-railway
 
 on:

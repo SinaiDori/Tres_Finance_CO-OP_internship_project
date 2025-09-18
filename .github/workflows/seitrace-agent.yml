@@ -1,3 +1,14 @@
+# GITHUB ACTIONS WORKFLOW - SEITRACE API KEY AUTOMATION
+# This workflow orchestrates cloud-based execution of the SeiTrace API key generation process.
+# It sets up a complete Ubuntu environment with virtual display capabilities, installs browser
+# automation dependencies, executes the main_seitrace.py script with IMAP email integration,
+# and automatically posts results to Slack channels. The workflow includes comprehensive caching
+# for performance, artifact collection for troubleshooting, and runs on a scheduled basis with
+# timezone-aware cron jobs. Unlike other workflows, video recording is disabled by default for
+# performance, but can be easily re-enabled for debugging purposes.
+# The workflow runs each mornoing at 8:00 local time.
+
+
 name: seitrace-agent
 
 on:
